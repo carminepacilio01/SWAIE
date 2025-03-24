@@ -1,6 +1,6 @@
 # MIT License
 
-# Copyright (c) 2023 Paolo Salvatore Galfano, Giuseppe Sorrentino
+# Copyright (c) [2025] [Carmine Pacilio]
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -44,28 +44,18 @@ TARGET := hw
 
 XOCCFLAGS := --platform $(PLATFORM) -t $(TARGET)  -s -g
 
-compile: setup_aie_$(TARGET).xo sink_from_aie_$(TARGET).xo 
+compile: smith_waterman_$(TARGET).xo
 
 # Use --optimize 3 to enable post-route optimizations. This may improve the bitstream but SIGNIFICANTLY increase compilation time
-setup_aie_$(TARGET).xo: ./setup_aie.cpp
-	v++ $(XOCCFLAGS) --kernel setup_aie -c -o $@ $<
-
-# Use --optimize 3 to enable post-route optimizations. This may improve the bitstream but SIGNIFICANTLY increase compilation time
-sink_from_aie_$(TARGET).xo: ./sink_from_aie.cpp
-	v++ $(XOCCFLAGS) --kernel sink_from_aie -c -o $@ $<
+smith_waterman_$(TARGET).xo: ./smith_waterman.cpp
+	v++ $(XOCCFLAGS) --kernel sw_maxi -c -o $@ $<
 
 # as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
-testbench_sink_from_aie: testbench/testbench_sink_from_aie.cpp
+testbench_sink_from_aie: testbench/sw_testbench.cpp
 	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2  
 	
-run_testbench_sink_from_aie: testbench_sink_from_aie
-	cd testbench && ./testbench_sink_from_aie 
-
-testbench_setupaie: testbench/testbench_setupaie.cpp
-	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2
-
-run_testbench_setupaie: testbench_setupaie
-	cd testbench && ./testbench_setupaie
+run_testbench_sink_from_aie: sw_testbench
+	cd testbench && ./sw_testbench 
 
 ################## clean up
 clean:

@@ -21,14 +21,25 @@
 *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 *SOFTWARE.
 ******************************************/
+
 #include <iostream>
 #include <vector>
 #include <limits>
 #include <string.h>
 #include <ap_int.h>
 #include <random>
-#include "smith_waterman.h"
+#include "../common/common.h"
 #include <time.h>
+
+typedef struct conf {
+	int match;
+	int mismatch;
+	int gap_opening;
+	int gap_extension;
+} conf_t;
+
+typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+typedef ap_uint<PORT_WIDTH> input_t;
 
 void sw_maxi(input_t *input_output,  conf_t scoring, int num_couples);
 void printConf(char *seqA, char *seqB, int ws, int wd, int gap_opening, int enlargement);
