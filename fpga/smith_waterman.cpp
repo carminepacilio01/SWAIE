@@ -21,6 +21,7 @@
  *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *SOFTWARE.
  ******************************************/
+ 
  #include <iostream>
  #include <vector>
  #include <limits>
@@ -28,6 +29,16 @@
  #include <ap_int.h>
  #include "smith_waterman.h"
  #include "hls_stream.h"
+
+ typedef struct conf {
+	int match;
+	int mismatch;
+	int gap_opening;
+	int gap_extension;
+} conf_t;
+
+typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+typedef ap_uint<PORT_WIDTH> input_t;
  
  const unsigned int depth_stream = DEPTH_STREAM;
  const unsigned int no_couples_per_stream = NO_COUPLES_PER_STREAM / NUM_CU;
