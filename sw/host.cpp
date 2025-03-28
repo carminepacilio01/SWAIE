@@ -22,12 +22,32 @@
 *SOFTWARE.
 ******************************************/
 
+#include <iostream>
+#include <vector>
+#include <limits>
+#include <string.h>
+#include <ap_int.h>
+#include <random>
+#include <time.h>
+
+#include "xcl/xcl2.hpp"
 #include "../common/common.h"
+
+typedef struct conf {
+	int match;
+	int mismatch;
+	int gap_opening;
+	int gap_extension;
+} conf_t;
+
+typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+typedef ap_uint<PORT_WIDTH> input_t;
 
 void printConf(char *target, char *database, int ws, int wd, int gap_opening, int enlargement);
 int compute_golden(int lenT, char *target, int lenD, char *database, int wd, int ws, int gap_opening, int enlargement);
 void random_seq_gen(int lenT, char *target, int lenD, char *database);
 int gen_rnd(int min, int max);
+alphabet_datatype compression(char letter);
 
 int main(int argc, char* argv[]){
 
@@ -38,10 +58,18 @@ int main(int argc, char* argv[]){
 
     srandom(static_cast<unsigned>(time(0)));
 
+	int num_couples = INPUT_SIZE;
+
 	const int wd 			=  1; 	// match score
 	const int ws 			= -1;	// mismatch score
 	const int gap_opening	= -3;
 	const int enlargement 	= -1;
+
+	conf_t local_conf;
+	local_conf.match 			= wd;
+	local_conf.mismatch			= ws;
+	local_conf.gap_opening		= gap_opening + enlargement;
+	local_conf.gap_extension	= enlargement;
 
     cl_int 				err;
     cl::Context 		context;
@@ -54,6 +82,8 @@ int main(int argc, char* argv[]){
 
 	char target[INPUT_SIZE][MAX_DIM];
 	char database[INPUT_SIZE][MAX_DIM];
+
+	input_t input_output[N_PACK] = {0};
 
 	int cell_number;
 
@@ -87,6 +117,39 @@ int main(int argc, char* argv[]){
 					t_rev[i][j] = target[i][lenT[i] - j - 1];
 				}
 		}
+	
+	// populating kernel datatypes
+	alphabet_datatype compressed_input[(INPUT_SIZE*(SEQ_SIZE + PADDING_SIZE))*2];
+	for(int n=0; n < INPUT_SIZE; n++){
+		char tmp[MAX_DIM];
+		copy_reversed_for: for (int i = 0; i < lenA[n]; i++) {
+			tmp[i] = seqA[n][lenA[n] - i - 1];
+		}
+		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
+			compressed_input[i+(2*n)*(SEQ_SIZE + PADDING_SIZE)] = compression(tmp[i]);
+		}
+	}
+	for(int n=0; n < INPUT_SIZE; n++){
+		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
+			compressed_input[i+(2*n+1)*(SEQ_SIZE + PADDING_SIZE)] = compression(seqB[n][i]);
+		}
+	}
+
+
+	for (int n = 0; n < num_couples; n++) {
+		int* input_lengths = (int*)&input_output[n*(PACK_SEQ*2+1)];
+
+		input_lengths[0] = lenA[n];
+		input_lengths[1] = lenB[n];
+
+		int k = 0;
+		for(int i = 0; i < PACK_SEQ*2 ; i++){
+			for(int j = 0; j < 128; j++){
+				input_output[1 + n*(PACK_SEQ*2+1) + i].range((j+1)*BITS_PER_CHAR-1, j*BITS_PER_CHAR) = compressed_input[k+((SEQ_SIZE + PADDING_SIZE)*2)*n];
+				k++;
+			}
+		}
+	}
 
 /////////////////////////		OPENCL CONFIGURATION 		////////////////////////////////////
 
@@ -122,30 +185,20 @@ int main(int argc, char* argv[]){
     }
 
 	// Create device buffers
-    cl::Buffer lenT_buffer(context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, sizeof(int)*INPUT_SIZE, lenT.data());
-    cl::Buffer target_buffer(context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, sizeof(char)*INPUT_SIZE*MAX_DIM, t_rev);
-    cl::Buffer lenD_buffer(context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, sizeof(int)*INPUT_SIZE, lenD.data());
-	cl::Buffer database_buffer(context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, sizeof(char)*INPUT_SIZE*MAX_DIM, database);
-    cl::Buffer score_buffer(context, CL_MEM_USE_HOST_PTR | CL_MEM_WRITE_ONLY, sizeof(int)*INPUT_SIZE, score.data());
+    cl::Buffer input_output_buffer(context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, sizeof(input_t)*N_PACK, input_output);
 
 	std::cout <<("Copying input sequences on the FPGA. \n");
 
     // Data will be migrated to kernel space
-    err = q.enqueueMigrateMemObjects({lenT_buffer, target_buffer, lenD_buffer, database_buffer}, 0); /*0 means from host*/
+    err = q.enqueueMigrateMemObjects({input_output_buffer}, 0); /*0 means from host*/
 	q.finish();
 
 /////////////////////////		KERNEL EXCECUTION 		////////////////////////////////////
 
 	// Set the arguments for kernel execution
-	OCL_CHECK(err, err = krnl.setArg(0, lenT_buffer));
-	OCL_CHECK(err, err = krnl.setArg(1, target_buffer));
-	OCL_CHECK(err, err = krnl.setArg(2, lenD_buffer));
-	OCL_CHECK(err, err = krnl.setArg(3, database_buffer));
-	OCL_CHECK(err, err = krnl.setArg(4, wd));
-	OCL_CHECK(err, err = krnl.setArg(5, ws));
-	OCL_CHECK(err, err = krnl.setArg(6, gap_opening));
-	OCL_CHECK(err, err = krnl.setArg(7, enlargement));
-	OCL_CHECK(err, err = krnl.setArg(8, score_buffer));
+	OCL_CHECK(err, err = krnl.setArg(0, input_output_buffer));
+	OCL_CHECK(err, err = krnl.setArg(1, local_conf));
+	OCL_CHECK(err, err = krnl.setArg(2, num_couples));
 
 	if (err != CL_SUCCESS) {
 		std::cout << "Error: Failed to set kernel arguments! " << err << std::endl;
@@ -157,11 +210,7 @@ int main(int argc, char* argv[]){
 	
 	//Launch the Kernels
 	auto start = std::chrono::high_resolution_clock::now();
-	for(int ker = 0; ker < NUM_KER; ker++) {
-		OCL_CHECK(err, err = krnl.setArg(9, ker * INPUT_SIZE / NUM_KER));
-		OCL_CHECK(err, err = krnl.setArg(10, INPUT_SIZE / NUM_KER));
-         q.enqueueTask(krnl);
-     }
+    q.enqueueTask(krnl);
 	q.finish();
 	auto stop = std::chrono::high_resolution_clock::now();
 
@@ -284,4 +333,21 @@ int compute_golden(int lenT, char *target, int lenD, char *database, int wd, int
 	    }
 
 	    return max_score;
+}
+
+alphabet_datatype compression(char letter) {
+    switch (letter) {
+		case '-':
+			return 4;
+        case 'A':
+            return 0;
+        case 'C':
+            return 1;
+        case 'G':
+            return 2;
+        case 'T':
+            return 3;
+    }
+
+    return -1;
 }

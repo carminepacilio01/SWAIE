@@ -40,7 +40,7 @@ test:
 
 #
 ## Build hardware (xclbin) objects
-build_hw: compile_fpga compile_aie hw_link
+build_hw: compile_fpga # compile_aie hw_link
 #
 compile_aie:
 	@make -C ./aie aie_compile SHELL_NAME=$(SHELL_NAME)

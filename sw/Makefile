@@ -1,6 +1,6 @@
 # MIT License
 
-# Copyright (c) [2025] [Carmine Pacilio]
+# Copyright (c) [2025]
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -47,7 +47,7 @@ LDFLAGS += $(LDFLAGS) -lxrt_coreutil
 
 EXECUTABLE := host_overlay.exe
 
-HOST_SRCS := ./host_code.cpp
+HOST_SRCS := ./host.cpp
 
 all: build_sw
 build_sw: $(EXECUTABLE)

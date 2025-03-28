@@ -1,7 +1,7 @@
 /******************************************
 *MIT License
 *
-# *Copyright (c) [2025] [Carmine Pacilio]
+# *Copyright (c) [2025]
 *
 *Permission is hereby granted, free of charge, to any person obtaining a copy
 *of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@
 #define MAX_DIM (150+PADDING_SIZE)
 #define SEQ_SIZE (MAX_DIM-PADDING_SIZE)
 #define DEPTH_STREAM MAX_DIM
-#define INPUT_SIZE 6900
+#define INPUT_SIZE 10000
 #define NO_COUPLES_PER_STREAM (DEPTH_STREAM/(PACK_SEQ*2))*NUM_CU
 
 #define BITS_PER_CHAR 4

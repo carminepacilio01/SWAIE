@@ -1,7 +1,7 @@
 /******************************************
  *MIT License
  *
- *Copyright (c) [2025] [Carmine Pacilio]
+ *Copyright (c) [2025]
  *
  *Permission is hereby granted, free of charge, to any person obtaining a copy
  *of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@
  #include <limits>
  #include <string.h>
  #include <ap_int.h>
- #include "smith_waterman.h"
+ #include "../common/common.h"
  #include "hls_stream.h"
 
  typedef struct conf {
