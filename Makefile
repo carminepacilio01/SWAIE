@@ -40,7 +40,7 @@ test:
 
 #
 ## Build hardware (xclbin) objects
-build_hw: compile_fpga # compile_aie hw_link
+build_hw: compile_fpga hw_link # compile_aie 
 #
 compile_aie:
 	@make -C ./aie aie_compile SHELL_NAME=$(SHELL_NAME)
@@ -63,6 +63,7 @@ testbench_all:
 NAME := hw_build
 #
 pack:
+	mkdir -p build/hw_build
 	@cp sw/host_overlay.exe build/$(NAME)/
 	@cp linking/overlay_hw.xclbin build/$(NAME)/
 #

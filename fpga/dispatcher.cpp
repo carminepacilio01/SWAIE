@@ -1,4 +1,4 @@
-/******************************************
+cd /******************************************
  *MIT License
  *
  *Copyright (c) [2025]
@@ -14,30 +14,40 @@
  *copies or substantial portions of the Software.
  *
  *THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- *IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  *FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  *AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  *LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  *OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *SOFTWARE.
  ******************************************/
+
 #include <iostream>
 #include <vector>
 #include <limits>
 #include <string.h>
 #include <ap_int.h>
-#include "smith_waterman.h"
+#include "../common/common.h"
 #include "hls_stream.h"
 
+typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+typedef ap_uint<PORT_WIDTH> input_t;
+
+typedef struct conf {
+	int match;
+	int mismatch;
+	int gap_opening;
+	int gap_extension;
+} conf_t;
+
 const unsigned int depth_stream = DEPTH_STREAM;
-const unsigned int no_couples_per_stream = NO_COUPLES_PER_STREAM / NUM_CU;
+const unsigned int no_couples_per_stream = NO_COUPLES_PER_STREAM;
 const unsigned int unroll_f = 2;
 const unsigned int num_pack = (PACK_SEQ << 1) + 1;
 
 void computeSW(hls::stream<input_t> &reads_stream,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream,
-		hls::stream<int> &score_local_stream, conf_t scoring) {
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s, conf_t scoring) {
 
 	int lenT = targetLength_stream.read();
 	int lenD = databaseLength_stream.read();
@@ -57,58 +67,16 @@ void computeSW(hls::stream<input_t> &reads_stream,
 		auto packed_data = p_input_output[i];
 		for (int j = 0; j < 128; j++) {
 
-				debug_array[k] = p_input_output[i].range(
-					(j + 1) * BITS_PER_CHAR - 1,
-					j * BITS_PER_CHAR
-				);
-				// std::cout << debug_array[k] << " ";
-				k++;
+			debug_array[k] = p_input_output[i].range(
+				(j + 1) * BITS_PER_CHAR - 1,
+				j * BITS_PER_CHAR
+			);
+			k++;
 		}
 	}
 
 	alphabet_datatype* target = debug_array;
 	alphabet_datatype* database = debug_array + lenT + PADDING_SIZE;
-
-	/*alphabet_datatype target[MAX_DIM];
-	alphabet_datatype database[MAX_DIM];
-
-	std::cout << "target: ";
-
-	for (int i = 0; i < PACK_SEQ; i++) {
-		auto packed_data = p_input_output[i];
-		for (int j = 0; j < 128; j++) {
-			if (k < lenT) {
-				target[k] = p_input_output[i].range(
-					(j + 1) * BITS_PER_CHAR - 1,
-					j * BITS_PER_CHAR
-				);
-				std::cout << target[k] << " ";
-				k++;
-			}
-		}
-	}
-	std::cout << std::endl;
-	std::cout << "database: ";
-	k = 0;
-	for (int i = PACK_SEQ; i < 2 * PACK_SEQ; i++) {
-		auto packed_data = p_input_output[i];
-		for (int j = 0; j < 128; j++) {
-			if (k < lenD) {
-				database[k] = p_input_output[i].range(
-					(j + 1) * BITS_PER_CHAR - 1,
-					j * BITS_PER_CHAR
-				);
-				std::cout << database[k] << " ";
-				k++;
-			}
-		}
-	}
-	std::cout << std::endl;
-
-	*/
-
-
-
 
 //	initialize local buffer for the 3 dependency
 	short p_buffer[3][MAX_DIM];
@@ -292,16 +260,15 @@ void read_input_data_wrapper(input_t *input_output,
 }
 
 void dispatcher(hls::stream<input_t> &input_output_stream,
-		hls::stream<input_t> reads_stream[NUM_CU], int num_couples,
+		hls::stream<input_t> reads_stream, int num_couples,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream,
-		hls::stream<int> tlen_local_stream[NUM_CU],
-		hls::stream<int> dlen_local_stream[NUM_CU]) {
+		hls::stream<int> tlen_local_stream,
+		hls::stream<int> dlen_local_stream) {
 
 	int idx = 0;
 
-	loop_dispatcher: for (int i = 0; i < num_couples;
-			i++, idx = idx < (NUM_CU - 1) ? (idx + 1) : 0) {
+	loop_dispatcher: for (int i = 0; i < num_couples; i++) {
 
 		loop_dispatcher_inner: for (int j = 0; j < ((PACK_SEQ << 1) + 1); j++) {
 #pragma HLS PIPELINE
@@ -309,15 +276,15 @@ void dispatcher(hls::stream<input_t> &input_output_stream,
 			if (j == 0) {
 
 				int tmp_1 = targetLength_stream.read();
-				tlen_local_stream[idx].write(tmp_1);
+				tlen_local_stream.write(tmp_1);
 
 				int tmp_2 = databaseLength_stream.read();
-				dlen_local_stream[idx].write(tmp_2);
+				dlen_local_stream.write(tmp_2);
 
 			} else {
 
 				input_t tmp = input_output_stream.read();
-				reads_stream[idx].write(tmp);
+				reads_stream.write(tmp);
 			}
 		}
 	}
@@ -328,7 +295,7 @@ void compute_wrapper(hls::stream<input_t> &reads_stream,
 		hls::stream<int> &databaseLength_stream,
 		hls::stream<int> &score_local_stream, int num_couples, conf_t scoring) {
 
-	int num_iter = num_couples / NUM_CU;
+	int num_iter = num_couples;
 
 	loop_compute_wrapper: for (int n = 0; n < num_iter; n++) {
 #pragma HLS PIPELINE off
@@ -337,61 +304,14 @@ void compute_wrapper(hls::stream<input_t> &reads_stream,
 	}
 }
 
-void collector(hls::stream<int> score_local_stream[NUM_CU],
-		hls::stream<int> &final_score_stream, int num_couples) {
-
-	loop_collector: for (int i = 0; i < num_couples / NUM_CU; i++) {
-		loop_collector_inner: for (int j = 0; j < NUM_CU; j++) {
-#pragma HLS PIPELINE
-			int tmp = score_local_stream[j].read();
-			final_score_stream.write(tmp);
-		}
-	}
-
-}
-
-void write_score(hls::stream<int> &final_score_stream, int n,
-		input_t *input_output, int num_couples, int &to_send) {
-
-#pragma HLS INLINE off
-	static int tmp[NUM_TMP_WRITE];
-#pragma HLS BIND_STORAGE variable=tmp type=ram_1p impl=bram
-
-	tmp[n & (NUM_TMP_WRITE - 1)] = final_score_stream.read();
-
-	if ((n > 0 && (((n + 1) & (NUM_TMP_WRITE - 1)) == 0))
-			|| n == num_couples - 1) {
-		int iter = (to_send >= NUM_TMP_WRITE) ? NUM_TMP_WRITE : to_send;
-
-		for (int i = 0; i < iter; i++) {
-#pragma HLS pipeline
-			input_output[n + i + 1 - iter] = tmp[i];
-		}
-
-		to_send -= iter;
-	}
-
-}
-
-void write_score_wrapper(hls::stream<int> &score_local_stream, int num_couples,
-		input_t *input_output) {
-	int to_send = num_couples;
-
-	loop_write_score_wrapper: for (int n = 0; n < num_couples; n++) {
-#pragma HLS PIPELINE off
-		write_score(score_local_stream, n, input_output, num_couples, to_send);
-	}
-}
-
 void alignment(input_t *input_output, int num_couples, conf_t scoring,
 		hls::stream<input_t> &input_output_stream,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream,
-		hls::stream<int> score_local_stream[NUM_CU],
-		hls::stream<input_t> reads_stream[NUM_CU],
-		hls::stream<int> &final_score_stream,
-		hls::stream<int> tlen_local_stream[NUM_CU],
-		hls::stream<int> dlen_local_stream[NUM_CU] ) {
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s,
+		hls::stream<input_t> reads_stream,
+		hls::stream<int> tlen_local_stream,
+		hls::stream<int> dlen_local_stream) {
 
 #pragma HLS INLINE
 
@@ -404,34 +324,31 @@ void alignment(input_t *input_output, int num_couples, conf_t scoring,
 			targetLength_stream, databaseLength_stream, tlen_local_stream,
 			dlen_local_stream);
 
-	for (int i = 0; i < NUM_CU; i++) {
-#pragma HLS unroll
-		compute_wrapper(reads_stream[i], tlen_local_stream[i], dlen_local_stream[i],
-				score_local_stream[i], tot_couples, scoring);
+	// qui scriverà sui buffer degli AIE
+	compute_wrapper(reads_stream, tlen_local_stream, dlen_local_stream,
+			s, tot_couples, scoring);
 
-	}
-
-	collector(score_local_stream, final_score_stream, tot_couples);
-	write_score_wrapper(final_score_stream, tot_couples, input_output);
-
+	// collector(score_local_stream, final_score_stream, tot_couples);
+	// write_score_wrapper(final_score_stream, tot_couples, input_output);
 }
 
-//////////////////MASTER AXI
-//extern "C" {
-    void sw_maxi(input_t *input_output,  conf_t scoring, int num_couples) {
+
+extern "C" {
+    void sw_maxi(input_t *input,  conf_t scoring, int num_couples, hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s) {
 #pragma HLS INTERFACE s_axilite port=return bundle=control
 
-#pragma HLS INTERFACE m_axi port=input_output offset=slave bundle=gmem0 depth=m_axi_depth
-#pragma HLS INTERFACE s_axilite port=input_output bundle=control
+#pragma HLS INTERFACE m_axi port=input offset=slave bundle=gmem0 depth=m_axi_depth
+#pragma HLS INTERFACE s_axilite port=input bundle=control
 #pragma HLS INTERFACE s_axilite port=scoring bundle=control
 #pragma HLS INTERFACE s_axilite port=num_couples bundle=control
+#pragma HLS interface axis port=s
 
 #pragma HLS DATAFLOW
 
 	static hls::stream<input_t> input_output_stream("input_output_stream");
 #pragma HLS STREAM variable=input_output_stream depth=no_couples_per_stream dim=1
 
-	static hls::stream<input_t> reads_stream[NUM_CU];
+	static hls::stream<input_t> reads_stream;
 #pragma HLS STREAM variable=reads_stream depth=depth_stream dim=1
 #pragma HLS BIND_STORAGE variable=reads_stream type=fifo impl=bram
 
@@ -441,24 +358,18 @@ void alignment(input_t *input_output, int num_couples, conf_t scoring,
 	static hls::stream<int> databaseLength_stream("databaseLength_stream");
 #pragma HLS STREAM variable=databaseLength_stream depth=no_couples_per_stream dim=1
 
-	static hls::stream<int> tlen_local_stream[NUM_CU];
+	static hls::stream<int> tlen_local_stream;
 #pragma HLS STREAM variable=tlen_local_stream depth=no_couples_per_stream dim=1
 
-	static hls::stream<int> dlen_local_stream[NUM_CU];
+	static hls::stream<int> dlen_local_stream;
 #pragma HLS STREAM variable=dlen_local_stream depth=no_couples_per_stream dim=1
-
-	static hls::stream<int> score_local_stream[NUM_CU];
-#pragma HLS STREAM variable=score_local_stream depth=no_couples_per_stream dim=1
-
-	static hls::stream<int> final_scores_stream("final_scores_stream");
-#pragma HLS STREAM variable=final_scores_stream depth=no_couples_per_stream dim=1
 
 	int tot_couples = num_couples;
 
 	alignment(input_output, tot_couples, scoring, input_output_stream,
-			targetLength_stream, databaseLength_stream, score_local_stream,
-			reads_stream, final_scores_stream, tlen_local_stream,
+			targetLength_stream, databaseLength_stream, s,
+			reads_stream, tlen_local_stream,
 			dlen_local_stream);
 
     }
-//}
+}

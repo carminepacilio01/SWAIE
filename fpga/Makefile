@@ -44,18 +44,18 @@ TARGET := hw
 
 XOCCFLAGS := --platform $(PLATFORM) -t $(TARGET)  -s -g
 
-compile: smith_waterman_$(TARGET).xo
+compile: sw_maxi_$(TARGET).xo
 
 # Use --optimize 3 to enable post-route optimizations. This may improve the bitstream but SIGNIFICANTLY increase compilation time
-smith_waterman_$(TARGET).xo: ./smith_waterman.cpp
+sw_maxi_$(TARGET).xo: ./smith_waterman.cpp
 	v++ $(XOCCFLAGS) --kernel sw_maxi -c -o $@ $<
 
 # as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
-testbench_sink_from_aie: testbench/sw_testbench.cpp
-	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2  
+# testbench_sink_from_aie: testbench/sw_testbench.cpp
+# 	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2  
 	
-run_testbench_sink_from_aie: sw_testbench
-	cd testbench && ./sw_testbench 
+# run_testbench_sink_from_aie: sw_testbench
+# 	cd testbench && ./sw_testbench 
 
 ################## clean up
 clean:

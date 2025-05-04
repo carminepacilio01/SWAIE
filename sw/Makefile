@@ -38,8 +38,9 @@ help::
 CXXFLAGS := -std=c++17 -Wno-deprecated-declarations
 CXXFLAGS += -I$(XILINX_XRT)/include -I$(XILINX_HLS)/include
 
-LDFLAGS := -L$(XILINX_XRT)/lib
-LDFLAGS += $(LDFLAGS) -lxrt_coreutil
+LDFLAGS := -L$(XILINX_XRT)/lib 
+LDFLAGS += $(LDFLAGS) -lxrt_coreutil -pthread -lOpenCL -lrt -lstdc++ 
+
 
 # You can use them for including something. For example, opencv
 #LIBS = `pkg-config --libs opencv`
@@ -47,7 +48,7 @@ LDFLAGS += $(LDFLAGS) -lxrt_coreutil
 
 EXECUTABLE := host_overlay.exe
 
-HOST_SRCS := ./host.cpp
+HOST_SRCS := host.cpp xcl/xcl2.cpp
 
 all: build_sw
 build_sw: $(EXECUTABLE)

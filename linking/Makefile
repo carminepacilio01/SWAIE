@@ -41,9 +41,8 @@ TARGET := hw
 # Use --optimize 3 to enable post-route optimizations. This may improve the bitstream but SIGNIFICANTLY increase compilation time
 XOCCLFLAGS := --kernel_frequency 200 --platform $(PLATFORM) -t $(TARGET)  -s -g
 
-AIE_OBJ := ../aie/libadf.a
-XOS     := ../fpga/setup_aie_$(TARGET).xo 
-XOS     += ../fpga/sink_from_aie_$(TARGET).xo 
+# AIE_OBJ := ../aie/libadf.a
+XOS     := ../fpga/sw_maxi_$(TARGET).xo
 XSA_OBJ := overlay_$(TARGET).xsa
 XCLBIN  := overlay_$(TARGET).xclbin
 
@@ -51,10 +50,10 @@ XCLBIN  := overlay_$(TARGET).xclbin
 
 all: $(XCLBIN)
 
-$(XCLBIN): $(XSA_OBJ) $(AIE_OBJ)
+$(XCLBIN): $(XSA_OBJ) #$(AIE_OBJ)
 	v++ -p -t $(TARGET) -f $(PLATFORM) $^ -o $@ --package.boot_mode=ospi
 
-$(XSA_OBJ): $(XOS) $(AIE_OBJ)
+$(XSA_OBJ): $(XOS) #$(AIE_OBJ)
 	v++ -l $(XOCCFLAGS) $(XOCCLFLAGS) --config xclbin_overlay.cfg -o $@ $^
 
 clean:

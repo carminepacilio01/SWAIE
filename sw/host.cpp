@@ -96,8 +96,8 @@ int main(int argc, char* argv[]){
 
 		//	generate random sequences
 		//	length of the sequences
-		lenT[i] = (int)  gen_rnd(MAX_SEQ_LEN - 10, MAX_SEQ_LEN - 2);
-		lenD[i] = (int)  gen_rnd(MAX_SEQ_LEN - 10, MAX_SEQ_LEN - 2);
+		lenT[i] = (int)  gen_rnd(SEQ_SIZE - 10, SEQ_SIZE - 2);
+		lenD[i] = (int)  gen_rnd(SEQ_SIZE - 10, SEQ_SIZE - 2);
 
 		lenT[i] += 1;
 		lenD[i] += 1;
@@ -110,20 +110,12 @@ int main(int argc, char* argv[]){
 		cell_number += lenD[i] * lenT[i];
 	}
 
-	// reverse the string
-		char t_rev[INPUT_SIZE][MAX_DIM];
-		for(int i = 0; i < INPUT_SIZE; i++){
-			for (int j = 0; j < lenT[i]; j++) {
-					t_rev[i][j] = target[i][lenT[i] - j - 1];
-				}
-		}
-	
 	// populating kernel datatypes
 	alphabet_datatype compressed_input[(INPUT_SIZE*(SEQ_SIZE + PADDING_SIZE))*2];
 	for(int n=0; n < INPUT_SIZE; n++){
 		char tmp[MAX_DIM];
-		copy_reversed_for: for (int i = 0; i < lenA[n]; i++) {
-			tmp[i] = seqA[n][lenA[n] - i - 1];
+		copy_reversed_for: for (int i = 0; i < lenT[n]; i++) {
+			tmp[i] = target[n][lenT[n] - i - 1];
 		}
 		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
 			compressed_input[i+(2*n)*(SEQ_SIZE + PADDING_SIZE)] = compression(tmp[i]);
@@ -131,7 +123,7 @@ int main(int argc, char* argv[]){
 	}
 	for(int n=0; n < INPUT_SIZE; n++){
 		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
-			compressed_input[i+(2*n+1)*(SEQ_SIZE + PADDING_SIZE)] = compression(seqB[n][i]);
+			compressed_input[i+(2*n+1)*(SEQ_SIZE + PADDING_SIZE)] = compression(database[n][i]);
 		}
 	}
 
@@ -139,8 +131,8 @@ int main(int argc, char* argv[]){
 	for (int n = 0; n < num_couples; n++) {
 		int* input_lengths = (int*)&input_output[n*(PACK_SEQ*2+1)];
 
-		input_lengths[0] = lenA[n];
-		input_lengths[1] = lenB[n];
+		input_lengths[0] = lenT[n];
+		input_lengths[1] = lenD[n];
 
 		int k = 0;
 		for(int i = 0; i < PACK_SEQ*2 ; i++){
@@ -224,7 +216,7 @@ int main(int argc, char* argv[]){
 	float gcup = (double) (cell_number / (float)duration.count());
 	
 	//Data from Kernel to Host
-    err = q.enqueueMigrateMemObjects({score_buffer}, CL_MIGRATE_MEM_OBJECT_HOST);  
+    err = q.enqueueMigrateMemObjects({input_output_buffer}, CL_MIGRATE_MEM_OBJECT_HOST);  
 	if (err != CL_SUCCESS) {
 		std::cout << "Error: Failed to retrive objects from kernel(s)!" << err << std::endl;
 		std::cout << "Test failed" << std::endl;
