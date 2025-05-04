@@ -30,6 +30,9 @@ help::
 	$(ECHO) "  make compile"
 	$(ECHO) "      Command to generate xo kernel file"
 	$(ECHO) ""
+	$(ECHO) "  make compile_clean"
+	$(ECHO) "      Command to clean and generate xo kernel file"
+	$(ECHO) ""
 	$(ECHO) "  make clean"
 	$(ECHO) "      Command to remove all the generated files."
 
@@ -44,11 +47,15 @@ TARGET := hw
 
 XOCCFLAGS := --platform $(PLATFORM) -t $(TARGET)  -s -g
 
-compile: sw_maxi_$(TARGET).xo
+compile: output_sink$(TARGET).xo # data_reader$(TARGET).xo
 
 # Use --optimize 3 to enable post-route optimizations. This may improve the bitstream but SIGNIFICANTLY increase compilation time
-sw_maxi_$(TARGET).xo: ./smith_waterman.cpp
-	v++ $(XOCCFLAGS) --kernel sw_maxi -c -o $@ $<
+
+# data_reader$(TARGET).xo: ./data_reader.cpp
+# 	v++ $(XOCCFLAGS) --kernel data_reader -c -o $@ $<
+
+output_sink$(TARGET).xo: ./output_sink.cpp
+	v++ $(XOCCFLAGS) --kernel output_sink -c -o $@ $<
 
 # as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
 # testbench_sink_from_aie: testbench/sw_testbench.cpp
@@ -56,6 +63,9 @@ sw_maxi_$(TARGET).xo: ./smith_waterman.cpp
 	
 # run_testbench_sink_from_aie: sw_testbench
 # 	cd testbench && ./sw_testbench 
+
+################## clean and compile
+compile_clean: clean compile
 
 ################## clean up
 clean:

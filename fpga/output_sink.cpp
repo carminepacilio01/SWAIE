@@ -30,12 +30,23 @@
  #include "../common/common.h"
  #include "hls_stream.h"
  
+ typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+typedef ap_uint<PORT_WIDTH> input_t;
+
+typedef struct conf {
+	int match;
+	int mismatch;
+	int gap_opening;
+	int gap_extension;
+} conf_t;
+
+const unsigned int depth_stream = DEPTH_STREAM;
+const unsigned int no_couples_per_stream = NO_COUPLES_PER_STREAM;
+const unsigned int unroll_f = 2;
+const unsigned int num_pack = (PACK_SEQ << 1) + 1;
 
 void write_score(hls::stream<int> &final_score_stream, int n,
-    input_t *input_output, int num_couples, int &to_send) {
-
-#pragma HLS interface axis port=score_local_stream
-#pragma HLS INTERFACE m_axi port=input_output offset=slave bundle=gmem0 depth=m_axi_depth
+    input_t *output, int num_couples, int &to_send) {
 
 #pragma HLS INLINE off
 static int tmp[NUM_TMP_WRITE];
@@ -48,30 +59,55 @@ if ((n > 0 && (((n + 1) & (NUM_TMP_WRITE - 1)) == 0)) || n == num_couples - 1) {
 
         for (int i = 0; i < iter; i++) {
 #pragma HLS pipeline
-            input_output[n + i + 1 - iter] = tmp[i];
+            output[n + i + 1 - iter] = tmp[i];
         }
         to_send -= iter;
     } 
 }
 
 void write_score_wrapper(hls::stream<int> &score_local_stream, int num_couples,
-    input_t *input_output) {
+    input_t *output) {
     int to_send = num_couples;
 
     loop_write_score_wrapper: for (int n = 0; n < num_couples; n++) {
     #pragma HLS PIPELINE off
-        write_score(score_local_stream, n, input_output, num_couples, to_send);
+        write_score(score_local_stream, n, output, num_couples, to_send);
     }
 }
 
-void collector(hls::stream<int> score_local_stream[NUM_CU],
+void collector(hls::stream<int32_t>& input_stream,
     hls::stream<int> &final_score_stream, int num_couples) {
 
-loop_collector: for (int i = 0; i < num_couples / NUM_CU; i++) {
-    loop_collector_inner: for (int j = 0; j < NUM_CU; j++) {
-#pragma HLS PIPELINE
-        int tmp = score_local_stream[j].read();
+loop_collector: for (int i = 0; i < num_couples; i++) {
+        int tmp = input_stream.read();
         final_score_stream.write(tmp);
-        }
+    }
+}
+
+extern "C" {
+    
+    void output_sink(
+        hls::stream<int32_t>& input_stream, 
+        input_t* output, 
+        int num_couples)
+    {
+    
+// PRAGMA for stream
+#pragma HLS interface axis port=input_stream
+// PRAGMA for memory interation - AXI master-slave
+#pragma HLS INTERFACE m_axi port=output depth=100 offset=slave bundle=gmem1
+#pragma HLS INTERFACE s_axilite port=output bundle=control
+// PRAGMA for AXI-LITE : required to move params from host to PL
+#pragma HLS interface s_axilite port=num_couples bundle=control
+#pragma HLS interface s_axilite port=return bundle=control
+
+#pragma HLS DATAFLOW
+
+    static hls::stream<int> final_score_stream;
+#pragma HLS STREAM variable=final_score_stream depth=no_couples_per_stream dim=1
+
+	collector(input_stream, final_score_stream, num_couples);
+	write_score_wrapper(final_score_stream, num_couples, output);
+
     }
 }

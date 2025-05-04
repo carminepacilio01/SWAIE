@@ -1,4 +1,4 @@
-cd /******************************************
+/******************************************
  *MIT License
  *
  *Copyright (c) [2025]
@@ -52,22 +52,22 @@ void computeSW(hls::stream<input_t> &reads_stream,
 	int lenT = targetLength_stream.read();
 	int lenD = databaseLength_stream.read();
 	
-	input_t p_input_output[PACK_SEQ << 1];
-#pragma HLS ARRAY_PARTITION variable=p_input_output dim=1 complete
+	input_t p_input[PACK_SEQ << 1];
+#pragma HLS ARRAY_PARTITION variable=p_input dim=1 complete
 
 
 	read_data_from_couple: for (int i = 0; i < num_pack - 1; i++) {
 #pragma HLS PIPELINE
-		p_input_output[i] = reads_stream.read();
+		p_input[i] = reads_stream.read();
 	}
 
 	alphabet_datatype debug_array[2*MAX_DIM];
 	int k = 0;
 	for (int i = 0; i < PACK_SEQ*2; i++) {
-		auto packed_data = p_input_output[i];
+		auto packed_data = p_input[i];
 		for (int j = 0; j < 128; j++) {
 
-			debug_array[k] = p_input_output[i].range(
+			debug_array[k] = p_input[i].range(
 				(j + 1) * BITS_PER_CHAR - 1,
 				j * BITS_PER_CHAR
 			);
@@ -214,11 +214,16 @@ void computeSW(hls::stream<input_t> &reads_stream,
 
     }
 
-    score_local_stream.write(max_score);
+	ap_int<sizeof(int32_t)*8*4> tmp;
+	tmp.range(31,0) = max_score;
+	tmp.range(63,32) = 0;
+	tmp.range(95,64) = 0;
+	tmp.range(127,96) = 0;
+	s.write(tmp);
 }
 
-void read_input_data(input_t *input_output,
-		hls::stream<input_t> &input_output_stream,
+void read_input_data(input_t *input,
+		hls::stream<input_t> &input_stream,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream, int n, int num_couples) {
 
@@ -232,7 +237,7 @@ void read_input_data(input_t *input_output,
 
 	for (int i = 0; i < iter; i++) {
 
-		input_t tmp = input_output[n * ((PACK_SEQ << 1) + 1) + i];
+		input_t tmp = input[n * ((PACK_SEQ << 1) + 1) + i];
 
 		if (i % ((PACK_SEQ << 1) + 1) == 0) {
 
@@ -242,29 +247,29 @@ void read_input_data(input_t *input_output,
 			databaseLength_stream.write(seq_length[1]);
 
 		} else {
-			input_output_stream.write(tmp);
+			input_stream.write(tmp);
 		}
 	}
 }
 
-void read_input_data_wrapper(input_t *input_output,
-		hls::stream<input_t> &input_output_stream,
+void read_input_data_wrapper(input_t *input,
+		hls::stream<input_t> &input_stream,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream, int num_couples) {
 
 	loop_read_input_data_wrapper: for (int n = 0; n < num_couples; n += NO_COUPLES_PER_STREAM)
 #pragma HLS PIPELINE off
-		read_input_data(input_output, input_output_stream, targetLength_stream,
+		read_input_data(input, input_stream, targetLength_stream,
 				databaseLength_stream, n, num_couples);
 
 }
 
-void dispatcher(hls::stream<input_t> &input_output_stream,
-		hls::stream<input_t> reads_stream, int num_couples,
+void dispatcher(hls::stream<input_t> &input_stream,
+		hls::stream<input_t> &reads_stream, int num_couples,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream,
-		hls::stream<int> tlen_local_stream,
-		hls::stream<int> dlen_local_stream) {
+		hls::stream<int> &tlen_local_stream,
+		hls::stream<int> &dlen_local_stream) {
 
 	int idx = 0;
 
@@ -283,7 +288,7 @@ void dispatcher(hls::stream<input_t> &input_output_stream,
 
 			} else {
 
-				input_t tmp = input_output_stream.read();
+				input_t tmp = input_stream.read();
 				reads_stream.write(tmp);
 			}
 		}
@@ -293,48 +298,43 @@ void dispatcher(hls::stream<input_t> &input_output_stream,
 void compute_wrapper(hls::stream<input_t> &reads_stream,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream,
-		hls::stream<int> &score_local_stream, int num_couples, conf_t scoring) {
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s, int num_couples, conf_t scoring) {
 
 	int num_iter = num_couples;
 
 	loop_compute_wrapper: for (int n = 0; n < num_iter; n++) {
 #pragma HLS PIPELINE off
 		computeSW(reads_stream, targetLength_stream, databaseLength_stream,
-				score_local_stream, scoring);
+				s, scoring);
 	}
 }
 
-void alignment(input_t *input_output, int num_couples, conf_t scoring,
-		hls::stream<input_t> &input_output_stream,
+void alignment(input_t *input, int num_couples, conf_t scoring,
+		hls::stream<input_t> &input_stream,
 		hls::stream<int> &targetLength_stream,
 		hls::stream<int> &databaseLength_stream,
 		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s,
-		hls::stream<input_t> reads_stream,
-		hls::stream<int> tlen_local_stream,
-		hls::stream<int> dlen_local_stream) {
+		hls::stream<input_t> &reads_stream,
+		hls::stream<int> &tlen_local_stream,
+		hls::stream<int> &dlen_local_stream) {
 
 #pragma HLS INLINE
 
 	int tot_couples = num_couples;
 
-	read_input_data_wrapper(input_output, input_output_stream,
+	read_input_data_wrapper(input, input_stream,
 			targetLength_stream, databaseLength_stream, tot_couples);
 
-	dispatcher(input_output_stream, reads_stream, tot_couples,
-			targetLength_stream, databaseLength_stream, tlen_local_stream,
-			dlen_local_stream);
+	dispatcher(input_stream, reads_stream, tot_couples,
+			targetLength_stream, databaseLength_stream, tlen_local_stream, dlen_local_stream);
 
-	// qui scriverà sui buffer degli AIE
 	compute_wrapper(reads_stream, tlen_local_stream, dlen_local_stream,
 			s, tot_couples, scoring);
-
-	// collector(score_local_stream, final_score_stream, tot_couples);
-	// write_score_wrapper(final_score_stream, tot_couples, input_output);
 }
 
 
 extern "C" {
-    void sw_maxi(input_t *input,  conf_t scoring, int num_couples, hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s) {
+    void data_reader(input_t *input,  conf_t scoring, int num_couples, hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s) {
 #pragma HLS INTERFACE s_axilite port=return bundle=control
 
 #pragma HLS INTERFACE m_axi port=input offset=slave bundle=gmem0 depth=m_axi_depth
@@ -345,8 +345,8 @@ extern "C" {
 
 #pragma HLS DATAFLOW
 
-	static hls::stream<input_t> input_output_stream("input_output_stream");
-#pragma HLS STREAM variable=input_output_stream depth=no_couples_per_stream dim=1
+	static hls::stream<input_t> input_stream("input_stream");
+#pragma HLS STREAM variable=input_stream depth=no_couples_per_stream dim=1
 
 	static hls::stream<input_t> reads_stream;
 #pragma HLS STREAM variable=reads_stream depth=depth_stream dim=1
@@ -366,10 +366,8 @@ extern "C" {
 
 	int tot_couples = num_couples;
 
-	alignment(input_output, tot_couples, scoring, input_output_stream,
+	alignment(input, tot_couples, scoring, input_stream,
 			targetLength_stream, databaseLength_stream, s,
-			reads_stream, tlen_local_stream,
-			dlen_local_stream);
-
+			reads_stream, tlen_local_stream, dlen_local_stream);
     }
 }
