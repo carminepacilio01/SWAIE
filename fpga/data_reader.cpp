@@ -338,6 +338,7 @@ extern "C" {
 #pragma HLS INTERFACE s_axilite port=return bundle=control
 
 #pragma HLS INTERFACE m_axi port=input offset=slave bundle=gmem0 depth=m_axi_depth
+
 #pragma HLS INTERFACE s_axilite port=input bundle=control
 #pragma HLS INTERFACE s_axilite port=scoring bundle=control
 #pragma HLS INTERFACE s_axilite port=num_couples bundle=control

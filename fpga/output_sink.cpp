@@ -86,28 +86,22 @@ loop_collector: for (int i = 0; i < num_couples; i++) {
 
 extern "C" {
     
-    void output_sink(
-        hls::stream<int32_t>& input_stream, 
-        input_t* output, 
-        int num_couples)
-    {
+    void output_sink(hls::stream<int32_t>& input_stream, input_t* output, int num_couples){
     
-// PRAGMA for stream
 #pragma HLS interface axis port=input_stream
-// PRAGMA for memory interation - AXI master-slave
-#pragma HLS INTERFACE m_axi port=output depth=100 offset=slave bundle=gmem1
+
+#pragma HLS INTERFACE m_axi port=output depth=m_axi_depth offset=slave bundle=gmem1
 #pragma HLS INTERFACE s_axilite port=output bundle=control
-// PRAGMA for AXI-LITE : required to move params from host to PL
 #pragma HLS interface s_axilite port=num_couples bundle=control
 #pragma HLS interface s_axilite port=return bundle=control
 
 #pragma HLS DATAFLOW
 
-    static hls::stream<int> final_score_stream;
+        static hls::stream<int> final_score_stream;
 #pragma HLS STREAM variable=final_score_stream depth=no_couples_per_stream dim=1
 
-	collector(input_stream, final_score_stream, num_couples);
-	write_score_wrapper(final_score_stream, num_couples, output);
+        collector(input_stream, final_score_stream, num_couples);
+        write_score_wrapper(final_score_stream, num_couples, output);
 
     }
 }

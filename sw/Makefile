@@ -39,6 +39,7 @@ CXXFLAGS := -std=c++17 -Wno-deprecated-declarations
 CXXFLAGS += -I$(XILINX_XRT)/include -I$(XILINX_HLS)/include
 
 LDFLAGS := -L$(XILINX_XRT)/lib 
+LDFLAGS += -luuid
 LDFLAGS += $(LDFLAGS) -lxrt_coreutil -pthread -lOpenCL -lrt -lstdc++ 
 
 

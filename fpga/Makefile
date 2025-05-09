@@ -47,14 +47,14 @@ TARGET := hw
 
 XOCCFLAGS := --platform $(PLATFORM) -t $(TARGET)  -s -g
 
-compile: output_sink$(TARGET).xo # data_reader$(TARGET).xo
+compile: data_reader_$(TARGET).xo output_sink_$(TARGET).xo 
 
 # Use --optimize 3 to enable post-route optimizations. This may improve the bitstream but SIGNIFICANTLY increase compilation time
 
-# data_reader$(TARGET).xo: ./data_reader.cpp
-# 	v++ $(XOCCFLAGS) --kernel data_reader -c -o $@ $<
+data_reader_$(TARGET).xo: ./data_reader.cpp
+	v++ $(XOCCFLAGS) --kernel data_reader -c -o $@ $<
 
-output_sink$(TARGET).xo: ./output_sink.cpp
+output_sink_$(TARGET).xo: ./output_sink.cpp
 	v++ $(XOCCFLAGS) --kernel output_sink -c -o $@ $<
 
 # as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
