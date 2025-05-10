@@ -51,10 +51,10 @@ XCLBIN  := overlay_$(TARGET).xclbin
 
 all: $(XCLBIN)
 
-$(XCLBIN): $(XSA_OBJ) #$(AIE_OBJ)
+$(XCLBIN): $(XSA_OBJ) $(AIE_OBJ)
 	v++ -p -t $(TARGET) -f $(PLATFORM) $^ -o $@ --package.boot_mode=ospi
 
-$(XSA_OBJ): $(XOS) #$(AIE_OBJ)
+$(XSA_OBJ): $(XOS) $(AIE_OBJ)
 	v++ -l $(XOCCFLAGS) $(XOCCLFLAGS) --config xclbin_overlay.cfg -o $@ $^
 
 clean:
