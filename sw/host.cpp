@@ -23,12 +23,8 @@ SOFTWARE.
 */
 
 #include <iostream>
-#include <fstream>
-#include <cstdlib>
 #include <unistd.h>
-#include <sys/stat.h>
 #include <string>
-
 #include <vector>
 #include <limits>
 #include <ap_int.h>
@@ -36,7 +32,6 @@ SOFTWARE.
 #include <time.h>
 
 #include "experimental/xrt_kernel.h"
-#include "experimental/xrt_uuid.h"
 #include "../common/common.h"
 
 // For hw emulation, run in sw directory: source ./setup_emu.sh -s on
@@ -94,9 +89,9 @@ int main(int argc, char *argv[]) {
     int lenD[INPUT_SIZE];
 	char database[INPUT_SIZE][MAX_DIM];
 
-	input_t input[N_PACK] = {0};
-    int32_t hw_score[N_PACK] = {0};
-    int32_t golden_score[N_PACK] = {0};
+	input_t input[PACK_SEQ] = {0};
+    int32_t hw_score[INPUT_SIZE] = {0};
+    int32_t golden_score[INPUT_SIZE] = {0};
 
 	int cell_number;
 

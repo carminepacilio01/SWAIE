@@ -27,7 +27,7 @@ ECHO=@echo
 help::
 	$(ECHO) ""
 	$(ECHO) "Makefile Usage:"
-	$(ECHO) "  make all TARGET=<hw/hw_emu>"
+	$(ECHO) "  make all TARGET=<hw|hw_emu>"
 	$(ECHO) ""
 	$(ECHO) "  make clean"
 	$(ECHO) "      Command to remove all the generated files."
@@ -44,8 +44,8 @@ XOCCLFLAGS := --kernel_frequency 200 --platform $(PLATFORM) -t $(TARGET)  -s -g
 AIE_OBJ := ../aie/libadf.a
 XOS     := ../fpga/data_reader_$(TARGET).xo 
 XOS     += ../fpga/output_sink_$(TARGET).xo 
-XSA_OBJ := overlay_$(TARGET).xsa
-XCLBIN  := overlay_$(TARGET).xclbin
+XSA_OBJ := kernel_$(TARGET).xsa
+XCLBIN  := kernel_$(TARGET).xclbin
 
 .phony: clean
 

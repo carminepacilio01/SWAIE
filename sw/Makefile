@@ -42,28 +42,22 @@ LDFLAGS := -L$(XILINX_XRT)/lib
 LDFLAGS += -luuid
 LDFLAGS += $(LDFLAGS) -lxrt_coreutil -pthread -lOpenCL -lrt -lstdc++ 
 
-
-# You can use them for including something. For example, opencv
-#LIBS = `pkg-config --libs opencv`
-#CFLAGS = `pkg-config --cflags opencv`
-
-EXECUTABLE := host_overlay.exe
-
-HOST_SRCS := host.cpp xcl/xcl2.cpp
+EXECUTABLE := host.exe
+XCLBIN := kernel_$(TARGET).xclbin
+HOST_SRCS := host.cpp
 
 all: build_sw
+
 build_sw: $(EXECUTABLE)
 
 run_sw:
-	./$(EXECUTABLE)
+	./$(EXECUTABLE) $(XCLBIN)
 
 #Eventually add LIBS and CFLAGS
 $(EXECUTABLE): $(HOST_SRCS)
 	$(CXX) -o $(EXECUTABLE) $^ $(CXXFLAGS) $(LDFLAGS) 
-	@rm -f ./overlay_hw.xclbin
-	@rm -f ./overlay_hw_emu.xclbin
-	@ln -s ../linking/overlay_hw.xclbin
-	@ln -s ../linking/overlay_hw_emu.xclbin
+	@rm -f ./$(XCLBIN)
+	@ln -s ../linking/$(XCLBIN) 
 
 ################## clean up
 clean:

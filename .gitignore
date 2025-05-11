@@ -29,3 +29,21 @@
 *.exe
 *.out
 *.app
+
+ _x 
+ .Xil 
+ *.ltx 
+ *.log 
+ *.jou 
+ *.info 
+ *.xo 
+ *.xo.* 
+ *.str 
+ *.xclbin 
+ .run 
+ *.wdb 
+ *.json 
+ *.wcfg 
+ *.protoinst 
+ *.csv
+sw/xrt.run_summary

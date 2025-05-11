@@ -30,7 +30,7 @@
  #include "../common/common.h"
  #include "hls_stream.h"
  
- typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
 
 typedef struct conf {

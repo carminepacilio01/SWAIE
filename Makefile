@@ -20,11 +20,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-.PHONY: help build_hw build_sw testbench_all pack build_and_pack clean clean_aie clean_FPGA clean_hw clean_sw
+.PHONY: help all build_hw build_sw testbench_all pack build_and_pack clean clean_aie clean_FPGA clean_hw clean_sw
 
 help:
 	@echo "Makefile Usage:"
-	@echo "  make build_hw [TARGET=hw_emu] SHELL_NAME=<qdma|xdma>"
+	@echo "  make build_hw [TARGET=<hw|hw_emu>] SHELL_NAME=<qdma|xdma>"
 	@echo ""
 	@echo "  make build_sw SHELL_NAME=<qdma|xdma>"
 	@echo ""
@@ -37,35 +37,40 @@ test:
 	@echo "TARGET: $(TARGET)"
 	@echo "SHELL_NAME: $(SHELL_NAME)"
 	@echo "PLATFORM: $(PLATFORM)"
+#
+## Build all objects
+all: build compile_sw
 
 #
-## Build hardware (xclbin) objects
-build_hw: compile_fpga compile_aie hw_link
+## Build (xclbin) objects for TARGET
+build: build_fpga compile_aie hw_link
 #
 compile_aie:
 	@make -C ./aie aie_compile SHELL_NAME=$(SHELL_NAME)
 #
-compile_fpga:
+build_fpga:
 	@make -C ./fpga compile TARGET=$(TARGET) PLATFORM=$(PLATFORM) SHELL_NAME=$(SHELL_NAME)
 #
 hw_link:
 	@make -C ./linking all TARGET=$(TARGET) PLATFORM=$(PLATFORM) SHELL_NAME=$(SHELL_NAME)
 #
 ## Build software object
-build_sw: 
+compile_sw: 
 	@make -C ./sw all 
 #
 testbench_all:
-	@make -C ./aie aie_compile_x86
-	@make -C ./fpga testbench_setupaie
-	@make -C ./fpga testbench_sink_from_aie
+#	@make -C ./aie aie_compile_x86
+#	@make -C ./fpga testbench_setupaie
+#	@make -C ./fpga testbench_sink_from_aie
 #
-NAME := hw_build
+
+NAME := $(TARGET)_build
 #
 pack:
-	mkdir -p build/hw_build
-	@cp sw/host_overlay.exe build/$(NAME)/
-	@cp linking/overlay_hw.xclbin build/$(NAME)/
+	mkdir -p build
+	mkdir -p build/$(NAME)
+	@cp sw/host.exe build/$(NAME)/
+	@cp linking/kernel_$(TARGET).xclbin build/$(NAME)/
 #
 build_and_pack:
 	@echo ""
