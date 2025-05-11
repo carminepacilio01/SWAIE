@@ -36,6 +36,13 @@ SOFTWARE.
 
 #define DEVICE_ID 2
 
+#define arg_reader_input 0
+#define arg_reader_scoring 1
+#define arg_reader_size 2
+
+#define arg_sink_output 1
+#define arg_sink_size 2
+
 std::ostream& bold_on(std::ostream& os) {
     if (&os == &std::cout && isatty(fileno(stdout))) {
         return os << "\e[1m";
@@ -69,7 +76,8 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-///////////////////////////     LOADING XCLBIN      ///////////////////////////  
+
+///////////////////////////     LOADING XCLBIN      /////////////////////////// 
 
     std::string xclbin_file = argv[0];
 
@@ -87,29 +95,29 @@ int main(int argc, char *argv[]) {
 
 ///////////////////////////     INITIALIZING THE BOARD     ///////////////////////////  
 
-//     // create kernel objects
-//     xrt::kernel krnl_setup_aie  = xrt::kernel(device, xclbin_uuid, "setup_aie");
-//     xrt::kernel krnl_sink_from_aie  = xrt::kernel(device, xclbin_uuid, "sink_from_aie");
+    // create kernel objects
+    xrt::kernel data_reader  = xrt::kernel(device, xclbin_uuid, "setup_aie");
+    xrt::kernel output_sink  = xrt::kernel(device, xclbin_uuid, "sink_from_aie");
 
-//     // get memory bank groups for device buffer - required for axi master input/ouput
-//     xrtMemoryGroup bank_output  = krnl_sink_from_aie.group_id(arg_sink_from_aie_output);
-//     xrtMemoryGroup bank_input  = krnl_setup_aie.group_id(arg_setup_aie_input);
+    // get memory bank groups for device buffer - required for axi master input/ouput
+    xrtMemoryGroup bank_output  = output_sink.group_id(arg_sink_output);
+    xrtMemoryGroup bank_input  = data_reader.group_id(arg_reader_input);
 
-//     // create device buffers - if you have to load some data, here they are
-//     xrt::bo buffer_setup_aie= xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_input); 
-//     xrt::bo buffer_sink_from_aie = xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_output); 
+    // create device buffers - if you have to load some data, here they are
+    xrt::bo buffer_setup_aie= xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_input); 
+    xrt::bo buffer_sink_from_aie = xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_output); 
 
-//     // create runner instances
-//     xrt::run run_setup_aie   = xrt::run(krnl_setup_aie);
-//     xrt::run run_sink_from_aie = xrt::run(krnl_sink_from_aie);
+    // create runner instances
+    xrt::run run_data_reader   = xrt::run(data_reader);
+    xrt::run run_output_sink = xrt::run(output_sink);
 
-//     // set setup_aie kernel arguments
-//     run_setup_aie.set_arg(arg_setup_aie_size,  size);
-//     run_setup_aie.set_arg(arg_setup_aie_input, buffer_setup_aie);
+    // set setup_aie kernel arguments
+    run_setup_aie.set_arg(arg_setup_aie_size,  size);
+    run_setup_aie.set_arg(arg_setup_aie_input, buffer_setup_aie);
 
-//     // set sink_from_aie kernel arguments
-//     run_sink_from_aie.set_arg(arg_sink_from_aie_output, buffer_sink_from_aie);
-//     run_sink_from_aie.set_arg(arg_sink_from_aie_size, size);
+    // set sink_from_aie kernel arguments
+    run_sink_from_aie.set_arg(arg_sink_from_aie_output, buffer_sink_from_aie);
+    run_sink_from_aie.set_arg(arg_sink_from_aie_size, size);
 
 //     // write data into the input buffer
 //     buffer_setup_aie.write(nums);
