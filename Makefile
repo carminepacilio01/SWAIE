@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-.PHONY: help all build_hw build_sw testbench_all pack build_and_pack clean clean_aie clean_FPGA clean_hw clean_sw
+.PHONY: help all build_fpga compile_sw  pack build clean clean_aie clean_FPGA clean_hw clean_sw
 
 help:
 	@echo "Makefile Usage:"
@@ -32,18 +32,17 @@ help:
 	@echo ""
 
 PLATFORM ?= xilinx_vck5000_gen4x8_qdma_2_202220_1
+TARGET ?= hw
 
 test:
 	@echo "TARGET: $(TARGET)"
 	@echo "SHELL_NAME: $(SHELL_NAME)"
 	@echo "PLATFORM: $(PLATFORM)"
 #
-## Build all objects
-all: build compile_sw
 
 #
 ## Build (xclbin) objects for TARGET
-build: build_fpga compile_aie hw_link
+compile: build_fpga compile_aie hw_link compile_sw
 #
 compile_aie:
 	@make -C ./aie aie_compile SHELL_NAME=$(SHELL_NAME)
@@ -58,11 +57,6 @@ hw_link:
 compile_sw: 
 	@make -C ./sw all 
 #
-testbench_all:
-#	@make -C ./aie aie_compile_x86
-#	@make -C ./fpga testbench_setupaie
-#	@make -C ./fpga testbench_sink_from_aie
-#
 
 NAME := $(TARGET)_build
 #
@@ -72,7 +66,7 @@ pack:
 	@cp sw/host.exe build/$(NAME)/
 	@cp linking/kernel_$(TARGET).xclbin build/$(NAME)/
 #
-build_and_pack:
+build:
 	@echo ""
 	@echo "*********************** Building ***********************"
 	@echo "- NAME          $(NAME)"
@@ -81,8 +75,7 @@ build_and_pack:
 	@echo "- SHELL_NAME    $(SHELL_NAME)"
 	@echo "********************************************************"
 	@echo ""
-	@make build_hw
-	@make build_sw
+	@make compile
 	@make pack
 
 # Clean objects

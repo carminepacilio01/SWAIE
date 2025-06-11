@@ -58,11 +58,11 @@ output_sink_$(TARGET).xo: ./output_sink.cpp
 	v++ $(XOCCFLAGS) --kernel output_sink -c -o $@ $<
 
 # as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
-# testbench_sink_from_aie: testbench/sw_testbench.cpp
-# 	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2  
+testbench: testbench/testbench.cpp
+	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2  
 	
-# run_testbench_sink_from_aie: sw_testbench
-# 	cd testbench && ./sw_testbench 
+run_testbench: testbench
+	cd testbench && ./testbench 
 
 ################## clean and compile
 compile_clean: clean compile

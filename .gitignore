@@ -30,20 +30,32 @@
 *.out
 *.app
 
- _x 
- .Xil 
- *.ltx 
- *.log 
- *.jou 
- *.info 
- *.xo 
- *.xo.* 
- *.str 
- *.xclbin 
- .run 
- *.wdb 
- *.json 
- *.wcfg 
- *.protoinst 
- *.csv
-sw/xrt.run_summary
+**/*_x
+**/*.Xil
+*_summary
+
+fpga/_x
+fpga/.Xil
+*.log
+*.xo
+
+*.db
+*.csv
+*.a
+
+aie/data
+aie/Work
+
+*.xclbin
+
+**/cfg
+**/emulation_data
+**/sim
+*.bin
+*.BIN
+*.bif
+*.xsa
+linking/launch_hw_emu.sh
+*.txt
+
+!build/**/** 

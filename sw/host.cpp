@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2023 Paolo Salvatore Galfano, Giuseppe Sorrentino
+Copyright (c) 2025 Carmine Pacilio
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +51,6 @@ typedef struct conf {
 	int match;
 	int mismatch;
 	int gap_opening;
-	int gap_extension;
 } conf_t;
 
 std::ostream& bold_on(std::ostream& os);
@@ -60,12 +59,11 @@ std::ostream& red(std::ostream& os);
 std::ostream& green(std::ostream& os);  
 std::ostream& reset(std::ostream& os);
 
-void printConf(char *target, char *database, int ws, int wd, int gap_opening, int enlargement);
-int compute_golden(int lenT, char *target, int lenD, char *database, int wd, int ws, int gap_opening, int enlargement);
-void random_seq_gen(int lenT, char *target, int lenD, char *database);
+void printConf(std::vector<char>& target, std::vector<char>& database, int ws, int wd, int gap_opening);
+int compute_golden(std::vector<char>& target, std::vector<char>& database, int wd, int ws, int gap_opening);
+void random_seq_gen(std::vector<char>& target, std::vector<char>& database);
 int gen_rnd(int min, int max);
 alphabet_datatype compression(char letter);
-
 
 int main(int argc, char *argv[]) {
 
@@ -75,23 +73,19 @@ int main(int argc, char *argv[]) {
 
 	const int wd 			=  1; 	// match score
 	const int ws 			= -1;	// mismatch score
-	const int gap_opening	= -3;
-	const int enlargement 	= -1;
+	const int gap_opening	= -2;
 
 	conf_t scoring;
 	scoring.match 			= wd;
 	scoring.mismatch			= ws;
-	scoring.gap_opening		= gap_opening + enlargement;
-	scoring.gap_extension	= enlargement;
+	scoring.gap_opening		= gap_opening;
 
-    int lenT[INPUT_SIZE];
-	char target[INPUT_SIZE][MAX_DIM];
-    int lenD[INPUT_SIZE];
-	char database[INPUT_SIZE][MAX_DIM];
+	std::vector< std::vector<char> > target(INPUT_SIZE, std::vector<char>(MAX_DIM));
+	std::vector< std::vector<char> > database(INPUT_SIZE, std::vector<char>(MAX_DIM));
 
 	input_t input[PACK_SEQ] = {0};
-    int32_t hw_score[INPUT_SIZE] = {0};
-    int32_t golden_score[INPUT_SIZE] = {0};
+	std::vector<int32_t> hw_score(INPUT_SIZE, 0);
+	std::vector<int32_t> golden_score(INPUT_SIZE, 0);
 
 	int cell_number;
 
@@ -104,7 +98,7 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-    std::string xclbin_file = argv[0];
+    std::string xclbin_file = argv[1];
 
     // Load xclbin
     std::cout << bold_on << "[SWAIE] Loading xclbin file: " << xclbin_file << bold_off << std::endl;
@@ -124,61 +118,49 @@ int main(int argc, char *argv[]) {
 	// Generation of random sequences
     for(int i = 0; i < INPUT_SIZE; i++){
 
-		//	generate random sequences
-		//	length of the sequences
-		lenT[i] = (int)  gen_rnd(SEQ_SIZE - 10, SEQ_SIZE - 2);
-		lenD[i] = (int)  gen_rnd(SEQ_SIZE - 10, SEQ_SIZE - 2);
-
-		lenT[i] += 1;
-		lenD[i] += 1;
-
 		//	generate rand sequences
-		target[i][0] = database[i][0] = '-';
-		target[i][lenT[i]] = database[i][lenD[i]] = '\0';
-		random_seq_gen(lenT[i], target[i], lenD[i], database[i]);
+		random_seq_gen(target[i], database[i]);
 		
-		cell_number += lenD[i] * lenT[i];
+		cell_number += SEQ_SIZE * SEQ_SIZE;
 	}
 
 	// populating kernel datatypes
+
+	//TO-DO: check here the creation of input buffer, how to pass it with fixed size, then also pass to AIE one stream for 
+	// database and one fro target... fix size... fix configuration.
 	alphabet_datatype compressed_input[(INPUT_SIZE*(SEQ_SIZE + PADDING_SIZE))*2];
 	for(int n=0; n < INPUT_SIZE; n++){
 		char tmp[MAX_DIM];
-		copy_reversed_for: for (int i = 0; i < lenT[n]; i++) {
-			tmp[i] = target[n][lenT[n] - i - 1];
+		copy_reversed_for: for (int i = 0; i < SEQ_SIZE; i++) {
+			tmp[i] = target[n][SEQ_SIZE - i - 1];
 		}
 		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
 			compressed_input[i+(2*n)*(SEQ_SIZE + PADDING_SIZE)] = compression(tmp[i]);
 		}
 	}
+
 	for(int n=0; n < INPUT_SIZE; n++){
 		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
 			compressed_input[i+(2*n+1)*(SEQ_SIZE + PADDING_SIZE)] = compression(database[n][i]);
 		}
 	}
 
-
 	for (int n = 0; n < size; n++) {
-		int* input_lengths = (int*)&input[n*(PACK_SEQ*2+1)];
-
-		input_lengths[0] = lenT[n];
-		input_lengths[1] = lenD[n];
 
 		int k = 0;
 		for(int i = 0; i < PACK_SEQ*2 ; i++){
 			for(int j = 0; j < 128; j++){
-				input[1 + n*(PACK_SEQ*2+1) + i].range((j+1)*BITS_PER_CHAR-1, j*BITS_PER_CHAR) = compressed_input[k+((SEQ_SIZE + PADDING_SIZE)*2)*n];
+				input[n*(PACK_SEQ*2+1) + i].range((j+1)*BITS_PER_CHAR-1, j*BITS_PER_CHAR) = compressed_input[k+((SEQ_SIZE + PADDING_SIZE)*2)*n];
 				k++;
 			}
 		}
 	}
 
-
-///////////////////////////     INITIALIZING THE BOARD     ///////////////////////////  
+///////////////////////////     INITIAL2IZING THE BOARD     ///////////////////////////  
 
     // create kernel objects
-    xrt::kernel data_reader  = xrt::kernel(device, xclbin_uuid, "setup_aie");
-    xrt::kernel output_sink  = xrt::kernel(device, xclbin_uuid, "sink_from_aie");
+    xrt::kernel data_reader  = xrt::kernel(device, xclbin_uuid, "data_reader");
+    xrt::kernel output_sink  = xrt::kernel(device, xclbin_uuid, "output_sink");
 
     // get memory bank groups for device buffer - required for axi master input/ouput
     xrtMemoryGroup bank_output  = output_sink.group_id(arg_sink_output);
@@ -192,7 +174,6 @@ int main(int argc, char *argv[]) {
     xrt::run run_data_reader   = xrt::run(data_reader);
     xrt::run run_output_sink = xrt::run(output_sink);
 
-    // set setup_aie kernel arguments
     run_data_reader.set_arg(arg_reader_input, buffer_reader);
     run_data_reader.set_arg(arg_reader_scoring, scoring);
     run_data_reader.set_arg(arg_reader_size, size);
@@ -216,15 +197,14 @@ int main(int argc, char *argv[]) {
     run_data_reader.wait();
     run_output_sink.wait();
     auto stop = std::chrono::high_resolution_clock::now();
-
     std::cout << "[SWAIE] Reading results." << bold_off;
     // read the output buffer
     buffer_output.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
-    buffer_output.read(hw_score);
+    buffer_output.read(hw_score.data()); 
 
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
 	float gcup = (double) (cell_number / (float)duration.count());
-
+	
     std::cout << bold_on << green << "[SWAIE] Finished FPGA excecution." << reset << std::endl;
     std::cout << "\t -- FPGA Kernel executed in " << (float)duration.count() * 1e-6 << "ms" << std::endl;
 	std::cout << "\t -- GCUPS: " << gcup << std::endl;
@@ -235,7 +215,7 @@ int main(int argc, char *argv[]) {
 	start = std::chrono::high_resolution_clock::now();
 
 	for (int golden_rep = 0; golden_rep < INPUT_SIZE; golden_rep++) {
-		golden_score[golden_rep] = compute_golden(lenT[golden_rep], target[golden_rep], lenD[golden_rep], database[golden_rep], wd, ws, gap_opening, enlargement);
+		golden_score[golden_rep] = compute_golden(target[golden_rep], database[golden_rep], wd, ws, gap_opening);
 	}
 
 	stop = std::chrono::high_resolution_clock::now();
@@ -251,7 +231,7 @@ int main(int argc, char *argv[]) {
 	for (int i=0; i < INPUT_SIZE; i++){
 		if (hw_score[i]!=golden_score[i]){
             std::cout << bold_on << red << "[SWAIE] Test [" << i << "] FAILED: Output does not match reference." << reset << std::endl;
-			printConf(target[i], database[i], ws, wd, gap_opening, enlargement);
+			printConf(target[i], database[i], ws, wd, gap_opening);
             std::cout << "HW: "<< hw_score[i] << ", SW: " << golden_score[i] << std::endl;
             test_score=false;
         }
@@ -266,13 +246,12 @@ int main(int argc, char *argv[]) {
 ///////////// UTILITY FUNCTIONS //////////////
 
 //	Prints the current configuration
-void printConf(char *target, char *database, int ws, int wd, int gap_opening, int enlargement) {
-	std::cout << "+++ Sequence A: [" << strlen(target) << "]: " << target << std::endl;
-	std::cout << "+++ Sequence B: [" << strlen(database) << "]: " << database << std::endl;
+void printConf(std::vector<char>& target, std::vector<char>& database, int ws, int wd, int gap_opening){
+	std::cout << "+++ Sequence A: [" << target.size() << "]: " << std::string(target.begin(), target.end()) << std::endl;
+	std::cout << "+++ Sequence B: [" << database.size() << "]: " << std::string(database.begin(), database.end()) << std::endl;
 	std::cout << "+++ Match Score: " << wd << std::endl;
 	std::cout << "+++ Mismatch Score: " << ws << std::endl;
 	std::cout << "+++ Gap Opening: " << gap_opening << std::endl;
-	std::cout << "+++ Enlargement: " << enlargement << std::endl;
 }
 
 int gen_rnd(int min, int max) {
@@ -280,43 +259,31 @@ int gen_rnd(int min, int max) {
     return (int) min + rand() % (max - min + 1);
 }
 
-void random_seq_gen(int lenT, char *target, int lenD, char *database) {
+void random_seq_gen(std::vector<char>& target, std::vector<char>& database){
 
 	char alphabet[4] = {'A', 'C', 'G', 'T'};
 	int i;
-	for(i = 1; i < lenT; i++){
+	for(i = 0; i < SEQ_SIZE; i++){
 		int tmp_gen = gen_rnd(0, 3);
 		target[i] = alphabet[tmp_gen];
 	}
 
-	for(i = 1; i < lenD; i++){
+	for(i = 0; i < SEQ_SIZE; i++){
 		int tmp_gen = gen_rnd(0, 3);
 		database[i] = alphabet[tmp_gen];
 	}
 }
 
-int compute_golden(int lenT, char *target, int lenD, char *database, int wd, int ws, int gap_opening, int enlargement) {
-	// Inizializza le matrici D, P, Q
-	    std::vector< std::vector<int> > D(lenT, std::vector<int>(lenD, 0));
-	    std::vector< std::vector<int> > P(lenT, std::vector<int>(lenD, std::numeric_limits<int>::min() / 2));
-	    std::vector< std::vector<int> > Q(lenT, std::vector<int>(lenD, std::numeric_limits<int>::min() / 2));
-
-	    int gap_penalty = gap_opening + enlargement * 1;
+int compute_golden(std::vector<char>& target, std::vector<char>& database, int wd, int ws, int gap_opening){
+	    std::vector< std::vector<int> > D(SEQ_SIZE+1, std::vector<int>(SEQ_SIZE+1, 0));
 	    int max_score = 0;
 
-	    for (int i = 1; i < lenT; ++i) {
-	        for (int j = 1; j < lenD; ++j) {
-	            // Calcola P[i][j]
-	            P[i][j] = std::max(P[i-1][j] + enlargement, D[i-1][j] + gap_penalty);
-
-	            // Calcola Q[i][j]
-	            Q[i][j] = std::max(Q[i][j-1] + enlargement, D[i][j-1] + gap_penalty);
-
-	            // Calcola D[i][j]
-	            int match = (target[i] == database[j]) ? wd : ws;
-	            D[i][j] = std::max(0, D[i-1][j-1] + match);
-	            D[i][j] = std::max(D[i][j], P[i][j]);
-	            D[i][j] = std::max(D[i][j], Q[i][j]);
+	     for (int i = 1; i < SEQ_SIZE+1; ++i) {
+	        for (int j = 1; j < SEQ_SIZE+1; ++j) {
+                int m = (target[i-1] == database[j-1]) ? wd : ws;
+                D[i][j] = std::max(0, D[i-1][j-1] + m);
+                D[i][j] = std::max(D[i][j], D[i-1][j] + gap_opening);
+                D[i][j] = std::max(D[i][j], D[i][j-1] + gap_opening);
 
 	            // Aggiorna lo score massimo
 	            max_score = std::max(max_score, D[i][j]);

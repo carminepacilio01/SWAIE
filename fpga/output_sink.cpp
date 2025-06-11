@@ -37,7 +37,6 @@ typedef struct conf {
 	int match;
 	int mismatch;
 	int gap_opening;
-	int gap_extension;
 } conf_t;
 
 const unsigned int depth_stream = DEPTH_STREAM;
