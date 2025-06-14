@@ -58,4 +58,8 @@ aie/Work
 linking/launch_hw_emu.sh
 *.txt
 
+*.fasta
+aie/x86simulator_output
+setup.sh
+
 !build/**/** 
