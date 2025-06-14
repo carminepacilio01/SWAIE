@@ -59,11 +59,13 @@ output_sink_$(TARGET).xo: ./output_sink.cpp
 
 # as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
 testbench: testbench/testbench.cpp
-	g++ -std=c++14 -I. -I$(XILINX_HLS)/include -o testbench/$@ $^ -O2  
+	g++ -std=c++17 -g -I. -I$(XILINX_HLS)/include -o testbench/$@.exe $^ ../sw/fastareader.cpp
 	
-run_testbench: testbench
-	cd testbench && ./testbench 
+debug_testbench: testbench
+	cd testbench && gdb ./testbench.exe 
 
+run_testbench: testbench
+	cd testbench && ./testbench.exe 
 ################## clean and compile
 compile_clean: clean compile
 

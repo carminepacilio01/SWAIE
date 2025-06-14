@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-.PHONY: help all build_fpga compile_sw  pack build clean clean_aie clean_FPGA clean_hw clean_sw
+.PHONY: help all build_fpga compile_sw pack build clean clean_aie clean_FPGA clean_hw clean_sw
 
 help:
 	@echo "Makefile Usage:"

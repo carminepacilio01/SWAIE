@@ -40,15 +40,13 @@ clean:
 aie_compile: libadf.a
 
 libadf.a: src/*
-	@echo "INFO:- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
-	@echo "INFO:Running aiecompiler for hw..."
+	@echo "[AIE SIMULATOR] Running aiecompiler for hw..."
 	@rm -rf Work libadf.a
 	@mkdir -p Work
 	@aiecompiler --target=hw --platform=$(PLATFORM) --include="src" --include="../common" --workdir=./Work --heapsize=2048 --stacksize=4096 --xlopt=2 -v src/graph.cpp
 	
 aie_compile_x86: 
-	@echo "INFO:- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
-	@echo "INFO:Running aiecompiler for x86sim..."
+	@echo "[AIE SIMULATOR] Running aiecompiler for x86sim..."
 	@rm -rf Work libadf.a
 	@mkdir -p Work
 	@aiecompiler --target=x86sim --platform=$(PLATFORM) --include="src" --include="../common" --workdir=./Work src/graph.cpp
@@ -56,13 +54,11 @@ aie_compile_x86:
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #Simulate AIE code
 aie_simulate:
-	@echo "INFO:- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
-	@echo "INFO:Running aiesimulator..."
+	@echo "[AIE SIMULATOR] Running VLIW simulator..."
 	@aiesimulator -v --pkg-dir=./Work --profile
 
 aie_simulate_x86:
-	@echo "INFO:- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
-	@echo "INFO:Running x86simulator..."
+	@echo "[AIE SIMULATOR] Running x86simulator..."
 	@x86simulator --pkg-dir=./Work
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #Upgrade IPs

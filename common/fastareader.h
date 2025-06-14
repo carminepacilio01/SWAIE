@@ -22,6 +22,25 @@
 *SOFTWARE.
 ******************************************/
 
-#pragma once
+#ifndef FASTAREADER_HPP
+#define FASTAREADER_HPP
+#include <ap_int.h>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <unistd.h>
+#include <string>
+#include "../common/common.h"
 
-#include "constants.h"
+namespace fastareader {
+    typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
+    std::pair< 
+        std::vector<std::vector<alphabet_datatype>>, 
+        std::vector<std::vector<alphabet_datatype>> 
+    > readFastaFile(const std::string& filename);
+    
+    alphabet_datatype compression(char letter);
+}
+
+
+#endif // FASTAREADER_HPP

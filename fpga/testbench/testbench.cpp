@@ -1,26 +1,26 @@
-/*
-MIT License
-
-Copyright (c) 2025 Carmine Pacilio
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+/******************************************
+*MIT License
+*
+# *Copyright (c) Carmine Pacilio [2025]
+*
+*Permission is hereby granted, free of charge, to any person obtaining a copy
+*of this software and associated documentation files (the "Software"), to deal
+*in the Software without restriction, including without limitation the rights
+*to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+*copies of the Software, and to permit persons to whom the Software is
+*furnished to do so, subject to the following conditions:
+*
+*The above copyright notice and this permission notice shall be included in all
+*copies or substantial portions of the Software.
+*
+*THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+*IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+*FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+*AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+*OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+*SOFTWARE.
+******************************************/
 
 #include <iostream>
 #include <unistd.h>
@@ -33,6 +33,7 @@ SOFTWARE.
 #include <chrono>
 
 #include "../common/common.h"
+#include "../common/fastareader.h"
 
 typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
@@ -44,15 +45,14 @@ typedef struct conf {
 } conf_t;
 
 
-void printConf(std::vector<char>& target, std::vector<char>& database, int ws, int wd, int gap_opening);
-int compute_golden(std::vector<char>& target, std::vector<char>& database, int wd, int ws, int gap_opening);
-void random_seq_gen(std::vector<char>& target, std::vector<char>& database);
-int gen_rnd(int min, int max);
-alphabet_datatype compression(char letter);
+void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int ws, int wd, int gap_opening);
+int compute_golden(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int wd, int ws, int gap_opening);
+std::string toString(const std::vector<alphabet_datatype>& seq);
 
 int main(int argc, char *argv[]) {
+	std::cout << "[SWAIE TESTBENCH] Starting testbench." << std::endl;;
 
-    srandom(static_cast<unsigned>(time(0)));
+	std::string filename;
 
 	int size = INPUT_SIZE;
 
@@ -62,125 +62,119 @@ int main(int argc, char *argv[]) {
 
 	conf_t scoring;
 	scoring.match 			= wd;
-	scoring.mismatch			= ws;
+	scoring.mismatch		= ws;
 	scoring.gap_opening		= gap_opening;
 
-	std::vector< std::vector<char> > target(INPUT_SIZE, std::vector<char>(MAX_DIM));
-	std::vector< std::vector<char> > database(INPUT_SIZE, std::vector<char>(MAX_DIM));
+	std::vector<int> golden_score(INPUT_SIZE, 0);
 
-	std::vector<int32_t> hw_score(INPUT_SIZE, 0);
-	std::vector<int32_t> golden_score(INPUT_SIZE, 0);
-
-	int cell_number;
-
-/////////////////////////		DATASET GENERATION 		////////////////////////////////////
-
-	std::cout << "[SWAIE TESTBENCH] Generating "<< INPUT_SIZE << " random sequence pairs..." << std::endl;
-	// Generation of random sequences
-    for(int i = 0; i < INPUT_SIZE; i++){
-
-		//	generate rand sequences
-		random_seq_gen(target[i], database[i]);
-		cell_number += SEQ_SIZE * SEQ_SIZE;
-	}
+	if(argc < 2) filename = "SRR33920980.fasta";
+	else filename = argv[1];
 
 /////////////////////////			TESTBENCH			////////////////////////////////////
 
-	std::cout << "[SWAIE TESTBENCH] Running Software version." << std::endl;;
-	auto start = std::chrono::high_resolution_clock::now();
+	std::cout << "[SWAIE TESTBENCH] Reading dataset version." << std::endl;
+
+	auto result = fastareader::readFastaFile(filename);
+	auto& target = std::get<0>(result);
+	auto& database = std::get<1>(result);
+
+	std::cout << "[SWAIE TESTBENCH] Running golden version." << std::endl;
 
 	for (int golden_rep = 0; golden_rep < INPUT_SIZE; golden_rep++) {
+		std::cout << "\r[SWAIE TESTBENCH] Aliging: " << golden_rep + 1 << "/" << INPUT_SIZE << std::flush;
 		golden_score[golden_rep] = compute_golden(target[golden_rep], database[golden_rep], wd, ws, gap_opening);
 	}
 
-	auto stop = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
-    auto gcup = (unsigned) cell_number / (float)duration.count();
-	
-	std::cout << "\t -- Software version executed in " <<  (float)duration.count() * 1e-6 << " ms " << std::endl;
-    std::cout << "\t -- GCUPS: " << gcup << std::endl;
+	std::cout << std::endl;
+	std::cout << "[SWAIE TESTBENCH] Golden version executed succesfully." << std::endl;
 
-	////////test bench results
-	// std::cout << bold_on << "[SWAIE] Comparing results. \n" << bold_off << std::endl;
-	// bool test_score=true;
-	// for (int i=0; i < INPUT_SIZE; i++){
-	// 	if (hw_score[i]!=golden_score[i]){
-    //         std::cout << bold_on << red << "[SWAIE] Test [" << i << "] FAILED: Output does not match reference." << reset << std::endl;
-	// 		printConf(target[i], database[i], ws, wd, gap_opening);
-    //         std::cout << "HW: "<< hw_score[i] << ", SW: " << golden_score[i] << std::endl;
-    //         test_score=false;
-    //     }
-	// }
+	std::cout << "[SWAIE TESTBENCH] Generating AIE input file." << std::endl;
+	std::ofstream in_target("../../aie/data/in_target.txt", std::ios::out | std::ios::trunc);
+	std::ofstream in_database("../../aie/data/in_database.txt", std::ios::out | std::ios::trunc);
+    if (!in_target || !in_database) {
+        std::cerr << "[SWAIE TESTBENCH] Error opening file(s) for writing." << std::endl;
+        return EXIT_FAILURE;
+    }
+	for(size_t i = 0; i < INPUT_SIZE; ++i) {
+		std::cout << "\r[SWAIE TESTBENCH] Writing sequence: " << i + 1 << "/" << INPUT_SIZE << std::flush;
+		for(size_t j = 0; j < 150; ++j) {
+			in_target << target[i][j] << std::endl;
+			in_database << database[i][j] << std::endl;
+		}
+	}
+	in_target.close();
+	in_database.close();
 
-	// if (test_score) std::cout << bold_on << green << "[SWAIE] Test PASSED: All outputs match are correct." << reset << std::endl;
-	// else std::cout << bold_on << red << "[SWAIE] Test FAILED: Some outputs do not match reference." << reset << std::endl;
+	std::cout << std::endl;
+	std::cout << "[SWAIE TESTBENCH] Running AIE simulation." << std::endl;
 	
+	int ret = std::system("make -C ../../aie aie_simulate_x86");
+
+    if (ret != 0) {
+        std::cerr << "[SWAIE TESTBENCH] Make target failed with code: " << ret << std::endl;
+        return ret;
+    }
+
+	std::cout << "[SWAIE TESTBENCH] Comparing results." << std::endl;
+	std::ifstream infile("../../aie/x86simulator_output/data/out_score.txt");
+	if (!infile) {
+		std::cerr << "[SWAIE TESTBENCH] Error opening output file." << std::endl;
+		return EXIT_FAILURE;
+	}
+	for(size_t i = 0; i < INPUT_SIZE; ++i) {
+		int aie_score;
+		infile >> aie_score;
+		if(aie_score != golden_score[i]) {
+			std::cerr << "[SWAIE TESTBENCH] Mismatch found at index " << i << ": AIE score = " << aie_score << ", Golden score = " << golden_score[i] << std::endl;
+			printConf(target[i], database[i], ws, wd, gap_opening);
+			return EXIT_FAILURE;
+		}
+		std::cout << "\r[SWAIE TESTBENCH] Comparing sequence: " << i + 1 << "/" << INPUT_SIZE << std::flush;
+	}
+	std::cout << std::endl;
+	std::cout << "[SWAIE TESTBENCH] All results match!" << std::endl;
+	std::cout << "[SWAIE TESTBENCH] Testbench completed successfully." << std::endl;
+
 	return 0;
 }
 
 ///////////// UTILITY FUNCTIONS //////////////
 
 //	Prints the current configuration
-void printConf(std::vector<char>& target, std::vector<char>& database, int ws, int wd, int gap_opening){
-	std::cout << "+++ Sequence A: [" << target.size() << "]: " << std::string(target.begin(), target.end()) << std::endl;
-	std::cout << "+++ Sequence B: [" << database.size() << "]: " << std::string(database.begin(), database.end()) << std::endl;
+void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int ws, int wd, int gap_opening){
+	std::cout << "+++ Sequence Target: [" << target.size() << "]: " << toString(target) << std::endl;
+	std::cout << "+++ Sequence Database: [" << database.size() << "]: " << toString(database) << std::endl;
 	std::cout << "+++ Match Score: " << wd << std::endl;
 	std::cout << "+++ Mismatch Score: " << ws << std::endl;
 	std::cout << "+++ Gap Opening: " << gap_opening << std::endl;
 }
 
-int gen_rnd(int min, int max) {
-     // Using random function to get random double value
-    return (int) min + rand() % (max - min + 1);
-}
+int compute_golden(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int wd, int ws, int gap_opening){
+	std::vector<std::vector<int>> D(SEQ_SIZE + 1, std::vector<int>(SEQ_SIZE + 1, 0));
+	D.shrink_to_fit();
+	int max_score = 0;
+	for (int i = 1; i < SEQ_SIZE+1; ++i) {
+		for (int j = 1; j < SEQ_SIZE+1; ++j) {
+			int m = (target[i-1] == database[j-1]) ? wd : ws;
+			D[i][j] = std::max(0, D[i-1][j-1] + m);
+			D[i][j] = std::max(D[i][j], D[i-1][j] + gap_opening);
+			D[i][j] = std::max(D[i][j], D[i][j-1] + gap_opening);
 
-void random_seq_gen(std::vector<char>& target, std::vector<char>& database){
-
-	char alphabet[4] = {'A', 'C', 'G', 'T'};
-	int i;
-	for(i = 0; i < SEQ_SIZE; i++){
-		int tmp_gen = gen_rnd(0, 3);
-		target[i] = alphabet[tmp_gen];
+			max_score = std::max(max_score, D[i][j]);
+		}
 	}
 
-	for(i = 0; i < SEQ_SIZE; i++){
-		int tmp_gen = gen_rnd(0, 3);
-		database[i] = alphabet[tmp_gen];
-	}
+	return max_score;
 }
 
-int compute_golden(std::vector<char>& target, std::vector<char>& database, int wd, int ws, int gap_opening){
-        std::vector<std::vector<int>> D(SEQ_SIZE + 1, std::vector<int>(SEQ_SIZE + 1, 0));
-	    int max_score = 0;
+std::string toString(const std::vector<alphabet_datatype>& seq) {
+    const std::string alphabet = "ACGT";
+    std::string result;
+    result.reserve(seq.size());
 
-	     for (int i = 1; i < SEQ_SIZE+1; ++i) {
-	        for (int j = 1; j < SEQ_SIZE+1; ++j) {
-                int m = (target[i-1] == database[j-1]) ? wd : ws;
-                D[i][j] = std::max(0, D[i-1][j-1] + m);
-                D[i][j] = std::max(D[i][j], D[i-1][j] + gap_opening);
-                D[i][j] = std::max(D[i][j], D[i][j-1] + gap_opening);
-
-	            // Aggiorna lo score massimo
-	            max_score = std::max(max_score, D[i][j]);
-	        }
-	    }
-
-	    return max_score;
-}
-
-alphabet_datatype compression(char letter) {
-    switch (letter) {
-		case '-':
-			return 4;
-        case 'A':
-            return 0;
-        case 'C':
-            return 1;
-        case 'G':
-            return 2;
-        case 'T':
-            return 3;
+    for (alphabet_datatype base : seq) {
+        result.push_back(alphabet[base]);
     }
 
-    return -1;
+    return result;
 }
