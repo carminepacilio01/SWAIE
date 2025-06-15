@@ -33,13 +33,11 @@ SOFTWARE.
 
 #include "experimental/xrt_kernel.h"
 #include "../common/common.h"
-
-// For hw emulation, run in sw directory: source ./setup_emu.sh -s on
+#include "../common/fastareader.h"
 
 #define DEVICE_ID 2
 
 #define arg_reader_input 0
-#define arg_reader_scoring 1
 #define arg_reader_size 2
 
 #define arg_sink_output 1
@@ -47,11 +45,6 @@ SOFTWARE.
 
 typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
-typedef struct conf {
-	int match;
-	int mismatch;
-	int gap_opening;
-} conf_t;
 
 std::ostream& bold_on(std::ostream& os);
 std::ostream& bold_off(std::ostream& os);
@@ -59,29 +52,21 @@ std::ostream& red(std::ostream& os);
 std::ostream& green(std::ostream& os);  
 std::ostream& reset(std::ostream& os);
 
-void printConf(std::vector<char>& target, std::vector<char>& database, int ws, int wd, int gap_opening);
-int compute_golden(std::vector<char>& target, std::vector<char>& database, int wd, int ws, int gap_opening);
+void printConf(std::vector<char>& target, std::vector<char>& database);
+int compute_golden(std::vector<char>& target, std::vector<char>& database);
 void random_seq_gen(std::vector<char>& target, std::vector<char>& database);
 int gen_rnd(int min, int max);
-alphabet_datatype compression(char letter);
+std::string toString(const std::vector<alphabet_datatype>& seq);
 
 int main(int argc, char *argv[]) {
 
     srandom(static_cast<unsigned>(time(0)));
 
+	std::string filename;
+	if(argc < 2) filename = "SRR33920980.fasta";
+	else filename = argv[1];
+
 	int size = INPUT_SIZE;
-
-	const int wd 			=  1; 	// match score
-	const int ws 			= -1;	// mismatch score
-	const int gap_opening	= -2;
-
-	conf_t scoring;
-	scoring.match 			= wd;
-	scoring.mismatch			= ws;
-	scoring.gap_opening		= gap_opening;
-
-	std::vector< std::vector<char> > target(INPUT_SIZE, std::vector<char>(MAX_DIM));
-	std::vector< std::vector<char> > database(INPUT_SIZE, std::vector<char>(MAX_DIM));
 
 	input_t input[PACK_SEQ] = {0};
 	std::vector<int32_t> hw_score(INPUT_SIZE, 0);
@@ -114,44 +99,31 @@ int main(int argc, char *argv[]) {
 
 /////////////////////////		DATASET GENERATION 		////////////////////////////////////
 
-	std::cout << "[SWAIE] Generating "<< INPUT_SIZE << " random sequence pairs..." << std::endl;
-	// Generation of random sequences
-    for(int i = 0; i < INPUT_SIZE; i++){
+	std::cout << "[SWAIE] Reading "<< INPUT_SIZE << " sequence from fasta file: " << filename << std::endl;
+	auto result = fastareader::readFastaFile(filename);
+	auto& target = std::get<0>(result);
+	auto& database = std::get<1>(result);
 
-		//	generate rand sequences
-		random_seq_gen(target[i], database[i]);
-		
-		cell_number += SEQ_SIZE * SEQ_SIZE;
-	}
-
-	// populating kernel datatypes
-
-	//TO-DO: check here the creation of input buffer, how to pass it with fixed size, then also pass to AIE one stream for 
-	// database and one fro target... fix size... fix configuration.
-	alphabet_datatype compressed_input[(INPUT_SIZE*(SEQ_SIZE + PADDING_SIZE))*2];
-	for(int n=0; n < INPUT_SIZE; n++){
-		char tmp[MAX_DIM];
-		copy_reversed_for: for (int i = 0; i < SEQ_SIZE; i++) {
-			tmp[i] = target[n][SEQ_SIZE - i - 1];
-		}
-		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
-			compressed_input[i+(2*n)*(SEQ_SIZE + PADDING_SIZE)] = compression(tmp[i]);
-		}
-	}
-
-	for(int n=0; n < INPUT_SIZE; n++){
-		for(int i = 0; i < SEQ_SIZE + PADDING_SIZE; i++){
-			compressed_input[i+(2*n+1)*(SEQ_SIZE + PADDING_SIZE)] = compression(database[n][i]);
-		}
-	}
-
+	int chars_per_word = WORD_SIZE / BITS_PER_CHAR;
 	for (int n = 0; n < size; n++) {
-
 		int k = 0;
 		for(int i = 0; i < PACK_SEQ*2 ; i++){
-			for(int j = 0; j < 128; j++){
-				input[n*(PACK_SEQ*2+1) + i].range((j+1)*BITS_PER_CHAR-1, j*BITS_PER_CHAR) = compressed_input[k+((SEQ_SIZE + PADDING_SIZE)*2)*n];
-				k++;
+			for (int j = 0; j < chars_per_word; j++) {
+				int global_char_index = i * chars_per_word + j;
+				if (global_char_index >= (SEQ_SIZE + PADDING_SIZE)*2) continue;
+
+				alphabet_datatype char_bits;
+				if (global_char_index < (SEQ_SIZE + PADDING_SIZE)) {
+					char_bits = target[n * (SEQ_SIZE + PADDING_SIZE) + global_char_index];
+				} else {
+					int db_index = global_char_index - (SEQ_SIZE + PADDING_SIZE);
+					char_bits = database[n * (SEQ_SIZE + PADDING_SIZE) + db_index];
+				}
+
+				input[n*(PACK_SEQ*2+1) + i].range(
+					(j + 1)*BITS_PER_CHAR - 1,
+					j * BITS_PER_CHAR
+				) = char_bits;
 			}
 		}
 	}
@@ -175,7 +147,6 @@ int main(int argc, char *argv[]) {
     xrt::run run_output_sink = xrt::run(output_sink);
 
     run_data_reader.set_arg(arg_reader_input, buffer_reader);
-    run_data_reader.set_arg(arg_reader_scoring, scoring);
     run_data_reader.set_arg(arg_reader_size, size);
 
     // set sink_from_aie kernel arguments
@@ -231,7 +202,7 @@ int main(int argc, char *argv[]) {
 	for (int i=0; i < INPUT_SIZE; i++){
 		if (hw_score[i]!=golden_score[i]){
             std::cout << bold_on << red << "[SWAIE] Test [" << i << "] FAILED: Output does not match reference." << reset << std::endl;
-			printConf(target[i], database[i], ws, wd, gap_opening);
+			printConf(target[i], database[i]);
             std::cout << "HW: "<< hw_score[i] << ", SW: " << golden_score[i] << std::endl;
             test_score=false;
         }
@@ -246,69 +217,37 @@ int main(int argc, char *argv[]) {
 ///////////// UTILITY FUNCTIONS //////////////
 
 //	Prints the current configuration
-void printConf(std::vector<char>& target, std::vector<char>& database, int ws, int wd, int gap_opening){
-	std::cout << "+++ Sequence A: [" << target.size() << "]: " << std::string(target.begin(), target.end()) << std::endl;
-	std::cout << "+++ Sequence B: [" << database.size() << "]: " << std::string(database.begin(), database.end()) << std::endl;
-	std::cout << "+++ Match Score: " << wd << std::endl;
-	std::cout << "+++ Mismatch Score: " << ws << std::endl;
-	std::cout << "+++ Gap Opening: " << gap_opening << std::endl;
+void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database){
+	std::cout << "+++ Sequence Target: [" << target.size() << "]: " << toString(target) << std::endl;
+	std::cout << "+++ Sequence Database: [" << database.size() << "]: " << toString(database) << std::endl;
+	std::cout << "+++ Match Score: " << MATCH << std::endl;
+	std::cout << "+++ Mismatch Score: " << MISMATCH << std::endl;
+	std::cout << "+++ Gap Opening: " << GAP_OPENING << std::endl;
 }
 
-int gen_rnd(int min, int max) {
-     // Using random function to get random double value
-    return (int) min + rand() % (max - min + 1);
-}
+int compute_golden(std::vector<char>& target, std::vector<char>& database){
+	std::vector<int> prev_row(SEQ_SIZE+1, 0);
+	std::vector<int> curr_row(SEQ_SIZE+1, 0);
+	int32_t score = 0;
 
-void random_seq_gen(std::vector<char>& target, std::vector<char>& database){
+	for (int i = 1; i <= SEQ_SIZE; ++i) {
+		for (int j = 1; j <= SEQ_SIZE; ++j) {
+			int m = (target[i - 1] == database[j - 1]) ? MATCH : MISMATCH;
 
-	char alphabet[4] = {'A', 'C', 'G', 'T'};
-	int i;
-	for(i = 0; i < SEQ_SIZE; i++){
-		int tmp_gen = gen_rnd(0, 3);
-		target[i] = alphabet[tmp_gen];
+			int score_diag = prev_row[j - 1] + m;       // match/mismatch
+			int score_up   = prev_row[j] + GAP_OPENING;         // deletion
+			int score_left = curr_row[j - 1] + GAP_OPENING;     // insertion
+
+			curr_row[j] = std::max({0, score_diag, score_up, score_left});
+			score = std::max(score, curr_row[j]);
+		}
+
+		std::memcpy(prev_row, curr_row, (SEQ_SIZE + 1) * sizeof(int));
 	}
 
-	for(i = 0; i < SEQ_SIZE; i++){
-		int tmp_gen = gen_rnd(0, 3);
-		database[i] = alphabet[tmp_gen];
-	}
+	return score;
 }
 
-int compute_golden(std::vector<char>& target, std::vector<char>& database, int wd, int ws, int gap_opening){
-	    std::vector< std::vector<int> > D(SEQ_SIZE+1, std::vector<int>(SEQ_SIZE+1, 0));
-	    int max_score = 0;
-
-	     for (int i = 1; i < SEQ_SIZE+1; ++i) {
-	        for (int j = 1; j < SEQ_SIZE+1; ++j) {
-                int m = (target[i-1] == database[j-1]) ? wd : ws;
-                D[i][j] = std::max(0, D[i-1][j-1] + m);
-                D[i][j] = std::max(D[i][j], D[i-1][j] + gap_opening);
-                D[i][j] = std::max(D[i][j], D[i][j-1] + gap_opening);
-
-	            // Aggiorna lo score massimo
-	            max_score = std::max(max_score, D[i][j]);
-	        }
-	    }
-
-	    return max_score;
-}
-
-alphabet_datatype compression(char letter) {
-    switch (letter) {
-		case '-':
-			return 4;
-        case 'A':
-            return 0;
-        case 'C':
-            return 1;
-        case 'G':
-            return 2;
-        case 'T':
-            return 3;
-    }
-
-    return -1;
-}
 
 ///////////// PRINTING FUNCTIONS //////////////
 
@@ -337,4 +276,16 @@ std::ostream& green(std::ostream& os) {
 // Reset all attributes
 std::ostream& reset(std::ostream& os) {
     return os << "\033[0m";
+}
+
+std::string toString(const std::vector<alphabet_datatype>& seq) {
+    const std::string alphabet = "ACGT";
+    std::string result;
+    result.reserve(seq.size());
+
+    for (alphabet_datatype base : seq) {
+        result.push_back(alphabet[base]);
+    }
+
+    return result;
 }

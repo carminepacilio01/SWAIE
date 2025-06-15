@@ -1,7 +1,7 @@
 /******************************************
  *MIT License
  *
- *Copyright (c) [2025]
+ *Copyright (c) Carmine Pacilio [2025]
  *
  *Permission is hereby granted, free of charge, to any person obtaining a copy
  *of this software and associated documentation files (the "Software"), to deal
@@ -32,30 +32,25 @@
 typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
 
-typedef struct conf {
-	int match;
-	int mismatch;
-	int gap_opening;
-} conf_t;
-
 const unsigned int depth_stream = DEPTH_STREAM;
 const unsigned int no_couples_per_stream = NO_COUPLES_PER_STREAM;
 const unsigned int unroll_f = 4;
 const unsigned int num_pack = (PACK_SEQ << 1) + 1;
 
-//the problem is here i think....
-void computeSW(hls::stream<input_t> &reads_stream, hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s, conf_t scoring) {
-	ap_int<sizeof(int32_t)*8*4> tmp;
+void computeSW(hls::stream<input_t> &reads_stream, 
+	hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& target_aie, 
+	hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& database_aie) {
 
-	#pragma HLS UNROLL factor=unroll_f
-	for (int i = 0; i < SEQ_SIZE / 2; i++) {
-		tmp.range(31,0) = reads_stream.read();
-		tmp.range(63,32) = reads_stream.read();
-		tmp.range(95,64) = reads_stream.read();
-		tmp.range(127,96) = reads_stream.read();
+		write_to_aie: for (int i = 0; i < SEQ_SIZE * 2; i++) {
+#pragma HLS PIPELINE II=1
+			input_t tmp = reads_stream.read();
 
-		s.write(tmp);
-	}
+			if (i < SEQ_SIZE) {
+				target_aie.write(tmp);
+			} else {
+				database_aie.write(tmp);
+			}
+		}
 }
 
 void read_input_data(input_t *input, hls::stream<input_t> &input_stream, int n, int num_couples) {
@@ -100,19 +95,22 @@ void dispatcher(hls::stream<input_t> &input_stream,
 }
 
 void compute_wrapper(hls::stream<input_t> &reads_stream,
-		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s, int num_couples, conf_t scoring) {
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& target_aie, 
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& database_aie, 
+		int num_couples) {
 
 	int num_iter = num_couples;
 
 	loop_compute_wrapper: for (int n = 0; n < num_iter; n++) {
 #pragma HLS PIPELINE off
-		computeSW(reads_stream, s, scoring);
+		computeSW(reads_stream, target_aie, database_aie);
 	}
 }
 
-void alignment(input_t *input, int num_couples, conf_t scoring,
+void alignment(input_t *input, int num_couples,
 		hls::stream<input_t> &input_stream,
-		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s,
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& target_aie, 
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& database_aie,
 		hls::stream<input_t> &reads_stream) {
 
 #pragma HLS INLINE
@@ -120,20 +118,24 @@ void alignment(input_t *input, int num_couples, conf_t scoring,
 	int tot_couples = num_couples;
 	read_input_data_wrapper(input, input_stream, tot_couples);
 	dispatcher(input_stream, reads_stream, tot_couples);
-	compute_wrapper(reads_stream, s, tot_couples, scoring);
+	compute_wrapper(reads_stream, target_aie, database_aie, tot_couples);
 }
 
 
 extern "C" {
-    void data_reader(input_t *input,  conf_t scoring, int num_couples, hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& s) {
+    void data_reader(input_t *input, int num_couples, 
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& target_aie,
+		hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& database_aie) {
 #pragma HLS INTERFACE s_axilite port=return bundle=control
 
 #pragma HLS INTERFACE m_axi port=input offset=slave bundle=gmem0 depth=m_axi_depth
 
 #pragma HLS INTERFACE s_axilite port=input bundle=control
-#pragma HLS INTERFACE s_axilite port=scoring bundle=control
 #pragma HLS INTERFACE s_axilite port=num_couples bundle=control
-#pragma HLS interface axis port=s
+
+// Comunication with AIE
+#pragma HLS interface axis port=target_aie
+#pragma HLS interface axis port=database_aie
 
 #pragma HLS DATAFLOW
 
@@ -146,6 +148,7 @@ extern "C" {
 
 	int tot_couples = num_couples;
 
-	alignment(input, tot_couples, scoring, input_stream, s, reads_stream);
+	alignment(input, tot_couples, input_stream, target_aie, database_aie, reads_stream);
+
     }
 }

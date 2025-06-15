@@ -57,12 +57,8 @@ data_reader_$(TARGET).xo: ./data_reader.cpp
 output_sink_$(TARGET).xo: ./output_sink.cpp
 	v++ $(XOCCFLAGS) --kernel output_sink -c -o $@ $<
 
-# as every C++ program, you may add libraies like: `pkg-config --libs opencv` `pkg-config --cflags opencv`
 testbench: testbench/testbench.cpp
 	g++ -std=c++17 -g -I. -I$(XILINX_HLS)/include -o testbench/$@.exe $^ ../sw/fastareader.cpp
-	
-debug_testbench: testbench
-	cd testbench && gdb ./testbench.exe 
 
 run_testbench: testbench
 	cd testbench && ./testbench.exe 

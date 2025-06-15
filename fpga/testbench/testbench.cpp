@@ -38,13 +38,6 @@
 typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
 
-typedef struct conf {
-	int match;
-	int mismatch;
-	int gap_opening;
-} conf_t;
-
-
 void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int ws, int wd, int gap_opening);
 int compute_golden(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int wd, int ws, int gap_opening);
 std::string toString(const std::vector<alphabet_datatype>& seq);
@@ -53,18 +46,6 @@ int main(int argc, char *argv[]) {
 	std::cout << "[SWAIE TESTBENCH] Starting testbench." << std::endl;;
 
 	std::string filename;
-
-	int size = INPUT_SIZE;
-
-	const int wd 			=  1; 	// match score
-	const int ws 			= -1;	// mismatch score
-	const int gap_opening	= -2;
-
-	conf_t scoring;
-	scoring.match 			= wd;
-	scoring.mismatch		= ws;
-	scoring.gap_opening		= gap_opening;
-
 	std::vector<int> golden_score(INPUT_SIZE, 0);
 
 	if(argc < 2) filename = "SRR33920980.fasta";
@@ -144,9 +125,9 @@ int main(int argc, char *argv[]) {
 void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int ws, int wd, int gap_opening){
 	std::cout << "+++ Sequence Target: [" << target.size() << "]: " << toString(target) << std::endl;
 	std::cout << "+++ Sequence Database: [" << database.size() << "]: " << toString(database) << std::endl;
-	std::cout << "+++ Match Score: " << wd << std::endl;
-	std::cout << "+++ Mismatch Score: " << ws << std::endl;
-	std::cout << "+++ Gap Opening: " << gap_opening << std::endl;
+	std::cout << "+++ Match Score: " << MATCH << std::endl;
+	std::cout << "+++ Mismatch Score: " << MISMATCH << std::endl;
+	std::cout << "+++ Gap Opening: " << GAP_OPENING << std::endl;
 }
 
 int compute_golden(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database, int wd, int ws, int gap_opening){

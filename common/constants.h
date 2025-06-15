@@ -51,6 +51,8 @@ const int m_axi_depth=MAX_DIM*(PACK_SEQ*2+1);
 #define UP_LEFT -1
 #define LEFT -1
 
-#define INFTY -32768 / 2
+#define MATCH 1
+#define MISMATCH -1
+#define GAP_OPENING -2
 
 #endif // CONSTANTS_H
