@@ -52,10 +52,8 @@ std::ostream& red(std::ostream& os);
 std::ostream& green(std::ostream& os);  
 std::ostream& reset(std::ostream& os);
 
-void printConf(std::vector<char>& target, std::vector<char>& database);
-int compute_golden(std::vector<char>& target, std::vector<char>& database);
-void random_seq_gen(std::vector<char>& target, std::vector<char>& database);
-int gen_rnd(int min, int max);
+void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database);
+int compute_golden(std::vector<alphabet_datatype>& target, std::vector<alphabet_datatype>& database);
 std::string toString(const std::vector<alphabet_datatype>& seq);
 
 int main(int argc, char *argv[]) {
@@ -104,7 +102,7 @@ int main(int argc, char *argv[]) {
 	auto& target = std::get<0>(result);
 	auto& database = std::get<1>(result);
 
-	int chars_per_word = WORD_SIZE / BITS_PER_CHAR;
+	int chars_per_word = PORT_WIDTH / BITS_PER_CHAR;
 	for (int n = 0; n < size; n++) {
 		int k = 0;
 		for(int i = 0; i < PACK_SEQ*2 ; i++){
@@ -114,10 +112,10 @@ int main(int argc, char *argv[]) {
 
 				alphabet_datatype char_bits;
 				if (global_char_index < (SEQ_SIZE + PADDING_SIZE)) {
-					char_bits = target[n * (SEQ_SIZE + PADDING_SIZE) + global_char_index];
+					char_bits = target[n][global_char_index];
 				} else {
 					int db_index = global_char_index - (SEQ_SIZE + PADDING_SIZE);
-					char_bits = database[n * (SEQ_SIZE + PADDING_SIZE) + db_index];
+					char_bits = database[n][global_char_index];
 				}
 
 				input[n*(PACK_SEQ*2+1) + i].range(
@@ -186,7 +184,7 @@ int main(int argc, char *argv[]) {
 	start = std::chrono::high_resolution_clock::now();
 
 	for (int golden_rep = 0; golden_rep < INPUT_SIZE; golden_rep++) {
-		golden_score[golden_rep] = compute_golden(target[golden_rep], database[golden_rep], wd, ws, gap_opening);
+		golden_score[golden_rep] = compute_golden(target[golden_rep], database[golden_rep]);
 	}
 
 	stop = std::chrono::high_resolution_clock::now();
@@ -217,7 +215,7 @@ int main(int argc, char *argv[]) {
 ///////////// UTILITY FUNCTIONS //////////////
 
 //	Prints the current configuration
-void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database){
+void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database) {
 	std::cout << "+++ Sequence Target: [" << target.size() << "]: " << toString(target) << std::endl;
 	std::cout << "+++ Sequence Database: [" << database.size() << "]: " << toString(database) << std::endl;
 	std::cout << "+++ Match Score: " << MATCH << std::endl;
@@ -225,7 +223,7 @@ void printConf(const std::vector<alphabet_datatype>& target, const std::vector<a
 	std::cout << "+++ Gap Opening: " << GAP_OPENING << std::endl;
 }
 
-int compute_golden(std::vector<char>& target, std::vector<char>& database){
+int compute_golden(std::vector<alphabet_datatype>& target, std::vector<alphabet_datatype>& database){
 	std::vector<int> prev_row(SEQ_SIZE+1, 0);
 	std::vector<int> curr_row(SEQ_SIZE+1, 0);
 	int32_t score = 0;
@@ -242,7 +240,7 @@ int compute_golden(std::vector<char>& target, std::vector<char>& database){
 			score = std::max(score, curr_row[j]);
 		}
 
-		std::memcpy(prev_row, curr_row, (SEQ_SIZE + 1) * sizeof(int));
+		prev_row = curr_row;
 	}
 
 	return score;

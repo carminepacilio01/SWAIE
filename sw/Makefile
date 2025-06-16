@@ -41,6 +41,7 @@ CXXFLAGS += -I$(XILINX_XRT)/include -I$(XILINX_HLS)/include
 LDFLAGS := -L$(XILINX_XRT)/lib 
 LDFLAGS += -luuid
 LDFLAGS += $(LDFLAGS) -lxrt_coreutil -pthread -lOpenCL -lrt -lstdc++ 
+LIB := ../sw/fastareader.cpp
 
 EXECUTABLE := host.exe
 XCLBIN := kernel_$(TARGET).xclbin
@@ -55,7 +56,7 @@ run_sw:
 
 #Eventually add LIBS and CFLAGS
 $(EXECUTABLE): $(HOST_SRCS)
-	$(CXX) -o $(EXECUTABLE) $^ $(CXXFLAGS) $(LDFLAGS) 
+	$(CXX) -o $(EXECUTABLE) $^ $(CXXFLAGS) $(LDFLAGS) $(LIB)
 	@rm -f ./$(XCLBIN)
 	@ln -s ../linking/$(XCLBIN) 
 
