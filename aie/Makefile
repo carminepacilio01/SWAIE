@@ -1,6 +1,6 @@
 # MIT License
 
-# Copyright (c) [2025] 
+# Copyright (c) Carmine Pacilio [2025] 
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,8 @@ all_x86: aie_compile_x86 aie_simulate_x86
 
 PLATFORM ?= /opt/xilinx/platforms/xilinx_vck5000_gen4x8_qdma_2_202220_1/hw/xilinx_vck5000_gen4x8_qdma_2_202220_1.xsa
 
+.PHONY: all all_x86 aie_compile aie_compile_x86 aie_simulate aie_simulate_x86 clean
+
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #Clean build products
 clean:
@@ -40,16 +42,16 @@ clean:
 aie_compile: libadf.a
 
 libadf.a: src/*
-	@echo "[AIE SIMULATOR] Running aiecompiler for hw..."
+	@echo "[AIE COMPILER] Running aiecompiler for hw..."
 	@rm -rf Work libadf.a
 	@mkdir -p Work
 	@aiecompiler --target=hw --platform=$(PLATFORM) --include="src" --include="../common" --workdir=./Work --heapsize=2048 --stacksize=4096 --xlopt=2 -v src/graph.cpp
 	
 aie_compile_x86: 
-	@echo "[AIE SIMULATOR] Running aiecompiler for x86sim..."
+	@echo "[AIE COMPILER] Running aiecompiler for x86sim..."
 	@rm -rf Work libadf.a
 	@mkdir -p Work
-	@aiecompiler --target=x86sim --platform=$(PLATFORM) --include="src" --include="../common" --workdir=./Work src/graph.cpp
+	@aiecompiler --target=x86sim --platform=$(PLATFORM) --include="src" --include="../common" --workdir=./Work src/graph.cpp 
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #Simulate AIE code
@@ -59,10 +61,4 @@ aie_simulate:
 
 aie_simulate_x86:
 	@echo "[AIE SIMULATOR] Running x86simulator..."
-	@x86simulator --pkg-dir=./Work
-#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#Upgrade IPs
-upgrade_ips:
-	@echo "INFO:- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
-	@echo "Upgrading all IPs to current version..."
-	vivado -mode batch -source scripts/upgrade_ips.tcl
+	@x86simulator --pkg-dir=./Work 2>&1 | sed 's/^/- /'

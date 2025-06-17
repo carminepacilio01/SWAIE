@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 .PHONY: help all build_fpga compile_sw pack build clean clean_aie clean_FPGA clean_hw clean_sw
+MAKEFLAGS += --no-print-directory
 
 help:
 	@echo "Makefile Usage:"
@@ -77,6 +78,9 @@ build:
 	@echo ""
 	@make compile
 	@make pack
+
+test_aie:
+	@make -C ./fpga run_testbench
 
 # Clean objects
 clean: clean_aie clean_fpga clean_hw clean_sw

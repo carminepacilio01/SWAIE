@@ -38,7 +38,7 @@ SOFTWARE.
 #define DEVICE_ID 2
 
 #define arg_reader_input 0
-#define arg_reader_size 2
+#define arg_reader_size 1
 
 #define arg_sink_output 1
 #define arg_sink_size 2
@@ -61,8 +61,8 @@ int main(int argc, char *argv[]) {
     srandom(static_cast<unsigned>(time(0)));
 
 	std::string filename;
-	if(argc < 2) filename = "SRR33920980.fasta";
-	else filename = argv[1];
+	if(argc < 3) filename = "SRR33920980.fasta";
+	else filename = argv[2];
 
 	int size = INPUT_SIZE;
 
@@ -98,42 +98,45 @@ int main(int argc, char *argv[]) {
 /////////////////////////		DATASET GENERATION 		////////////////////////////////////
 
 	std::cout << "[SWAIE] Reading "<< INPUT_SIZE << " sequence from fasta file: " << filename << std::endl;
-	auto result = fastareader::readFastaFile(filename);
-	auto& target = std::get<0>(result);
-	auto& database = std::get<1>(result);
+	auto [target, database] = fastareader::readFastaFile(filename);
 
-	int chars_per_word = PORT_WIDTH / BITS_PER_CHAR;
-	for (int n = 0; n < size; n++) {
-		int k = 0;
-		for(int i = 0; i < PACK_SEQ*2 ; i++){
-			for (int j = 0; j < chars_per_word; j++) {
-				int global_char_index = i * chars_per_word + j;
-				if (global_char_index >= (SEQ_SIZE + PADDING_SIZE)*2) continue;
-
-				alphabet_datatype char_bits;
-				if (global_char_index < (SEQ_SIZE + PADDING_SIZE)) {
-					char_bits = target[n][global_char_index];
-				} else {
-					int db_index = global_char_index - (SEQ_SIZE + PADDING_SIZE);
-					char_bits = database[n][global_char_index];
-				}
-
-				input[n*(PACK_SEQ*2+1) + i].range(
-					(j + 1)*BITS_PER_CHAR - 1,
-					j * BITS_PER_CHAR
-				) = char_bits;
-			}
+	std::vector<alphabet_datatype> tmp(INPUT_SIZE * MAX_DIM * 2, 0);
+	tmp.shrink_to_fit();
+	for (int i = 0; i < INPUT_SIZE; i++) {
+		for (int j = 0; j < MAX_DIM; j++) {
+			tmp[i+j] = target[i][j];
+		}
+		for (int j = MAX_DIM; j < MAX_DIM*2; j++) {
+			tmp[i+j] = database[i][j-MAX_DIM];
 		}
 	}
 
-///////////////////////////     INITIAL2IZING THE BOARD     ///////////////////////////  
+	// int chars_per_word = PORT_WIDTH / BITS_PER_CHAR;
+	// for (int n = 0; n < size; n++) {
+	// 	int k = 0;
+	// 	for(int i = 0; i < PACK_SEQ*2 ; i++) {
+	// 		for (int j = 0; j < chars_per_word; j++) {
+	// 			if(k > MAX_DIM*BITS_PER_CHAR) continue;
+	// 			else {
+	// 				input[n*(PACK_SEQ*2+1) + i].range(
+	// 					(j + 1)*BITS_PER_CHAR - 1,
+	// 					j * BITS_PER_CHAR
+	// 				) = tmp[n * MAX_DIM + k];
+	// 				k++;
+	// 			}
+	// 		}
+	// 	}
+	// }
+	
 
+///////////////////////////     INITIAL2IZING THE BOARD     ///////////////////////////  
+	std::cout << "[SWAIE] Programming device: " << std::endl;
     // create kernel objects
-    xrt::kernel data_reader  = xrt::kernel(device, xclbin_uuid, "data_reader");
-    xrt::kernel output_sink  = xrt::kernel(device, xclbin_uuid, "output_sink");
+    xrt::kernel data_reader = xrt::kernel(device, xclbin_uuid, "data_reader");
+    xrt::kernel output_sink = xrt::kernel(device, xclbin_uuid, "output_sink");
 
     // get memory bank groups for device buffer - required for axi master input/ouput
-    xrtMemoryGroup bank_output  = output_sink.group_id(arg_sink_output);
+    xrtMemoryGroup bank_output = output_sink.group_id(arg_sink_output);
     xrtMemoryGroup bank_input  = data_reader.group_id(arg_reader_input);
 
     // create device buffers - if you have to load some data, here they are
@@ -141,7 +144,7 @@ int main(int argc, char *argv[]) {
     xrt::bo buffer_output = xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_output); 
 
     // create runner instances
-    xrt::run run_data_reader   = xrt::run(data_reader);
+    xrt::run run_data_reader = xrt::run(data_reader);
     xrt::run run_output_sink = xrt::run(output_sink);
 
     run_data_reader.set_arg(arg_reader_input, buffer_reader);
@@ -151,7 +154,10 @@ int main(int argc, char *argv[]) {
     run_output_sink.set_arg(arg_sink_output, buffer_output);
     run_output_sink.set_arg(arg_sink_size, size);
 
+	std::cout << bold_on << green << "[SWAIE]  Device programmed succesfully: " << reset << std::endl;
+
     std::cout << bold_on << "[SWAIE] Running FPGA accelerator. \n" << bold_off;
+
     std::cout << "[SWAIE] Writing " << INPUT_SIZE << " sequences to accelarator. \n" << bold_off;
     // write data into the input buffer
     buffer_reader.write(input);

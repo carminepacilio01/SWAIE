@@ -30,51 +30,45 @@
 
 void compute_sw(input_stream<int32_t>* restrict in_target, input_stream<int32_t>* restrict in_database, 
     output_stream<int32_t>* restrict output) {
-    int match = 1;
-    int mismatch = -1;
-    int gap = -2;
 
-    for(int iter=0; iter < INPUT_SIZE; iter++) {
-        static uint32_t target[SEQ_SIZE];
-        static uint32_t database[SEQ_SIZE];
-        int prev_row[SEQ_SIZE+1] = {0};
-        int curr_row[SEQ_SIZE+1] = {0};
+    constexpr int32_t match = MATCH;
+    constexpr int32_t mismatch = MISMATCH;
+    constexpr int32_t gap_opening = GAP_OPENING;
+
+    for(int iter=0; iter < INPUT_SIZE / NUM_TILES; iter++) {
+
+		int32_t target[MAX_DIM] = {0};
+		int32_t database[MAX_DIM] = {0};
+        alignas(32) int32_t prev_row[SEQ_SIZE+1] = {0};
+        alignas(32) int32_t curr_row[SEQ_SIZE+1] = {0};
+
         int32_t score = 0;
 
-        for(int j=0; j < SEQ_SIZE / 4; j++) {
-            aie::vector<int32_t,4> tmp_target = readincr_v4(in_target);
-            aie::vector<int32_t,4> tmp_database = readincr_v4(in_database);
-			
-			target[j*4] = tmp_target[0];
-            target[j*4+1] = tmp_target[1];
-            target[j*4+2] = tmp_target[2];
-            target[j*4+3] = tmp_target[3];
+        for (int i = 0; i < MAX_DIM; i += 4) {
+            aie::vector<int32_t, 4> tr_vec = readincr_v4(in_target);
+            aie::vector<int32_t, 4> db_vec = readincr_v4(in_database);
 
-            database[j*4] = tmp_database[0];
-            database[j*4+1] = tmp_database[1];
-            database[j*4+2] = tmp_database[2];
-            database[j*4+3] = tmp_database[3];
+			aie::store_v(target + i, tr_vec);
+			aie::store_v(database + i, db_vec);
         }
 
-        target[37*4] = readincr(in_target); 
-        database[37*4] = readincr(in_database);
-        target[37*4 + 1] = readincr(in_target); 
-        database[37*4 + 1] = readincr(in_database);
+		for (int i = 1; i <= SEQ_SIZE; ++i) {
+			for (int j = 1; j <= SEQ_SIZE; ++j) {
+				int m = (target[i - 1] == database[j - 1]) ? MATCH : MISMATCH;
 
-        for (int i = 1; i <= SEQ_SIZE; ++i) {
-            for (int j = 1; j <= SEQ_SIZE; ++j) {
-                int m = (target[i - 1] == database[j - 1]) ? match : mismatch;
+				int score_diag = prev_row[j - 1] + m;       // match/mismatch
+				int score_up   = prev_row[j] + GAP_OPENING;         // deletion
+				int score_left = curr_row[j - 1] + GAP_OPENING;     // insertion
 
-                int score_diag = prev_row[j - 1] + m;       // match/mismatch
-                int score_up   = prev_row[j] + gap;         // deletion
-                int score_left = curr_row[j - 1] + gap;     // insertion
+				curr_row[j] = std::max({0, score_diag, score_up, score_left});
+				score = std::max(score, curr_row[j]);
+			}
 
-                curr_row[j] = std::max({0, score_diag, score_up, score_left});
-                score = std::max(score, curr_row[j]);
+			for (int i = 0; i < (SEQ_SIZE + 1); i += 4) {
+                auto vec = aie::load_v<4>(curr_row + i);
+                aie::store_v(prev_row + i, vec);
             }
-
-            std::memcpy(prev_row, curr_row, (SEQ_SIZE + 1) * sizeof(int));
-        }
+		}
 
         writeincr(output, score);
     }

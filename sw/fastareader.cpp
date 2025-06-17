@@ -67,6 +67,9 @@ namespace fastareader {
                     std::getline(file, line);
                 }
 
+                currSeq.push_back(4);
+                currSeq.push_back(4);
+
                 if(seqCounter == 0) {
                     target.push_back(currSeq);
                 }

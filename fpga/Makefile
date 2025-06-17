@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 ECHO=@echo
+MAKEFLAGS += --no-print-directory
 
 .PHONY: help
 

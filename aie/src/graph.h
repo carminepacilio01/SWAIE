@@ -26,6 +26,8 @@
 #include <adf.h>
 #include "sw_aie.h"
 
+#define NUM_TILES 8
+
 using namespace adf;
 
 class my_graph: public graph
@@ -33,39 +35,43 @@ class my_graph: public graph
 
 private:
 	// ------kernel declaration------
-	kernel sw_aie;
+	kernel sw_aie[NUM_TILES];
 
 public:
 	// ------Input and Output PLIO declaration------
-	input_plio in_target;
-	input_plio in_database;
-	output_plio out_1;
+	input_plio in_target[NUM_TILES];
+	input_plio in_database[NUM_TILES];
+	output_plio out[NUM_TILES];
 
 	my_graph()
 	{
-		// ------kernel creation------
-		sw_aie = kernel::create(compute_sw); // the input is the kernel function name
+		for (int i = 0; i < NUM_TILES; i++) {
+			// ------kernel creation------
+			sw_aie[i] = kernel::create(compute_sw);
 
-		// ------Input and Output PLIO creation------
-		// I argument: a name, that will be used to refer to the port in the block design
-		// II argument: the type of the PLIO that will be read/written. Test both plio_32_bits and plio_128_bits to verify the difference
-		// III argument: the path to the file that will be read/written for simulation
+			// Create PLIOs (optional: or use shared input)
+			std::string in_tr_name  = "in_target_"  + std::to_string(i);
+			std::string in_db_name  = "in_database_"  + std::to_string(i);
+			std::string out_name = "out_" + std::to_string(i);
 
-		in_target = input_plio::create("in_target", plio_32_bits, "data/in_target.txt");
-		in_database = input_plio::create("in_database", plio_32_bits, "data/in_database.txt");
-		out_1 = output_plio::create("out_plio_1", plio_32_bits, "data/out_score.txt");
+			in_target[i] = input_plio::create(in_tr_name, plio_32_bits, "data/input" + std::to_string(i) + ".txt");
+			in_database[i] = input_plio::create(in_db_name, plio_32_bits, "data/input" + std::to_string(i) + ".txt");
+			out[i] = output_plio::create(out_name, plio_32_bits, "data/output" + std::to_string(i) + ".txt");
 
-		// ------kernel connection------
-		// it is possible to have stream or window. This is just an example. Try both to see the difference
-		connect<stream>(in_target.out[0], sw_aie.in[0]);
-		connect<stream>(in_database.out[0], sw_aie.in[1]);
-		connect<stream>(sw_aie.out[0], out_1.in[0]);
-		// set kernel source and headers
-		source(sw_aie)  = "src/sw_aie.cpp";
-		headers(sw_aie) = {"src/sw_aie.h","../common/common.h"};// you can specify more than one header to include
+			// ------kernel connection------
+			// it is possible to have stream or window. This is just an example. Try both to see the difference
+			connect<stream>(in_target[i].out[0], sw_aie[i].in[0]);
+			connect<stream>(in_database[i].out[0], sw_aie[i].in[1]);
+			connect<stream>(sw_aie[i].out[0], out[i].in[0]);
 
-		// set ratio
-		runtime<ratio>(sw_aie) = 0.9; // 90% of the time the kernel will be executed. This means that 1 AIE will be able to execute just 1 Kernel
+			// set kernel source and headers
+			source(sw_aie[i]) = "src/sw_aie.cpp";
+			headers(sw_aie[i]) = {"src/sw_aie.h","../common/common.h"};
+			
+			// set ratio
+			runtime<ratio>(sw_aie[i]) = 0.9; // 90% of the time the kernel will be executed. This means that 1 AIE will be able to execute just 1 Kernel
+		}
+
 	};
 
 };

@@ -33,12 +33,6 @@
 typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
 
-typedef struct conf {
-	int match;
-	int mismatch;
-	int gap_opening;
-} conf_t;
-
 const unsigned int depth_stream = DEPTH_STREAM;
 const unsigned int no_couples_per_stream = NO_COUPLES_PER_STREAM;
 const unsigned int unroll_f = 2;
@@ -48,13 +42,13 @@ void write_score(hls::stream<int> &final_score_stream, int n,
     input_t *output, int num_couples, int &to_send) {
 
 #pragma HLS INLINE off
-static int tmp[NUM_TMP_WRITE];
+    static int tmp[NUM_TMP_WRITE];
 #pragma HLS BIND_STORAGE variable=tmp type=ram_1p impl=bram
 
-tmp[n & (NUM_TMP_WRITE - 1)] = final_score_stream.read();
+    tmp[n & (NUM_TMP_WRITE - 1)] = final_score_stream.read();
 
-if ((n > 0 && (((n + 1) & (NUM_TMP_WRITE - 1)) == 0)) || n == num_couples - 1) {
-    int iter = (to_send >= NUM_TMP_WRITE) ? NUM_TMP_WRITE : to_send;
+    if ((n > 0 && (((n + 1) & (NUM_TMP_WRITE - 1)) == 0)) || n == num_couples - 1) {
+        int iter = (to_send >= NUM_TMP_WRITE) ? NUM_TMP_WRITE : to_send;
 
         for (int i = 0; i < iter; i++) {
 #pragma HLS pipeline
@@ -74,18 +68,21 @@ void write_score_wrapper(hls::stream<int> &score_local_stream, int num_couples,
     }
 }
 
-void collector(hls::stream<int32_t>& input_stream,
+void collector(hls::stream<int32_t> input_stream[NUM_TILES],
     hls::stream<int> &final_score_stream, int num_couples) {
 
-loop_collector: for (int i = 0; i < num_couples; i++) {
-        int tmp = input_stream.read();
-        final_score_stream.write(tmp);
-    }
+    loop_collector: for (int i = 0; i < num_couples / NUM_TILES; i++) {
+		 loop_collector_inner: for (int j = 0; j < NUM_TILES; j++) {
+ #pragma HLS PIPELINE
+			int tmp = input_stream[j].read();
+			final_score_stream.write(tmp);
+		 }
+	 }
 }
 
 extern "C" {
     
-    void output_sink(hls::stream<int32_t>& input_stream, input_t* output, int num_couples){
+    void output_sink(hls::stream<int32_t> input_stream[NUM_TILES], input_t* output, int num_couples){
     
 #pragma HLS interface axis port=input_stream
 
