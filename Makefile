@@ -33,6 +33,7 @@ help:
 	@echo ""
 
 PLATFORM ?= xilinx_vck5000_gen4x8_qdma_2_202220_1
+# PLATFORM ?= xilinx_vck5000_gen4x8_xdma_2_202220_1
 TARGET ?= hw
 
 test:
