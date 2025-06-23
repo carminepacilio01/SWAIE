@@ -25,7 +25,7 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#define INPUT_SIZE 1000
+#define INPUT_SIZE 500000
 #define SEQ_SIZE 150
 
 #define PADDING_SIZE (4 - (SEQ_SIZE % 4)) % 4
@@ -41,7 +41,7 @@
 #define NUM_TMP_WRITE 512
 
 #define PACK_SEQ ((MAX_DIM*BITS_PER_CHAR-1)/PORT_WIDTH+1)
-#define N_PACK (INPUT_SIZE*(PACK_SEQ*2+1))
+#define N_PACK (INPUT_SIZE*(PACK_SEQ*2))
 
 #define NUM_TILES 8
 

@@ -35,6 +35,9 @@
 #include "../common/common.h"
 #include "../common/fastareader.h"
 
+#undef INPUT_SIZE
+#define INPUT_SIZE 10
+
 typedef ap_uint<BITS_PER_CHAR> alphabet_datatype;
 typedef ap_uint<PORT_WIDTH> input_t;
 
@@ -48,8 +51,9 @@ int main(int argc, char *argv[]) {
 
 	std::string filename;
 	std::vector<int> golden_score(INPUT_SIZE, 0);
+	input_t input[PACK_SEQ] = {0};
 
-	if(argc < 2) filename = "SRR33920980.fasta";
+	if(argc < 2) filename = "../../sw/SRR33920980.fasta";
 	else filename = argv[1];
 
 /////////////////////////			TESTBENCH			////////////////////////////////////
@@ -71,6 +75,60 @@ int main(int argc, char *argv[]) {
 	std::cout << std::endl;
 	std::cout << "[SWAIE TESTBENCH] Golden version executed succesfully." << std::endl;
 
+	std::cout << "[SWAIE TESTBENCH] Packing sequences." << std::endl;
+	std::vector<alphabet_datatype> tmp(INPUT_SIZE * MAX_DIM * 2, 0);
+	input_t p_input[N_PACK] = {0};
+	for (int i = 0; i < INPUT_SIZE; i++) {
+		for (int j = 0; j < MAX_DIM; j++) {
+			tmp[j+((SEQ_SIZE + PADDING_SIZE)*2)*i] = target[i][j];
+		}
+		for (int j = MAX_DIM; j < MAX_DIM*2; j++) {
+			tmp[j+((SEQ_SIZE + PADDING_SIZE)*2)*i] = database[i][j-MAX_DIM];
+		}
+	}
+
+	for (int n = 0; n < INPUT_SIZE; n++) {
+		int k = 0;
+		for(int i = 0; i < PACK_SEQ*2 ; i++){
+			for(int j = 0; j < 128; j++){
+				p_input[n*(PACK_SEQ*2) + i].range((j+1)*BITS_PER_CHAR-1, j*BITS_PER_CHAR) = tmp[k+((SEQ_SIZE + PADDING_SIZE)*2)*n];
+				k++;
+			}
+		}
+	}
+
+	std::cout << "[SWAIE TESTBENCH] Sequences packed succesfully." << std::endl;
+	std::cout << "[SWAIE TESTBENCH] Unpacking" << std::endl;
+	std::ofstream in_target_test("../../aie/data/in_target_test.txt", std::ios::out | std::ios::trunc);
+	std::ofstream in_database_test("../../aie/data/in_database_test.txt", std::ios::out | std::ios::trunc);
+    if (!in_target_test || !in_database_test) {
+        std::cerr << "[SWAIE TESTBENCH] Error opening file(s) for writing." << std::endl;
+        return EXIT_FAILURE;
+    }
+
+	for(size_t count = 0; count < INPUT_SIZE; ++count) {
+		int k = 0;
+		alphabet_datatype debug_array[2*MAX_DIM];
+		for (int i = 0; i < PACK_SEQ*2; i++) {
+			for (int j = 0; j < 128; j++) {
+				debug_array[k] = p_input[count*(PACK_SEQ*2) + i].range(
+					(j + 1) * BITS_PER_CHAR - 1,
+					j * BITS_PER_CHAR);
+				k++;
+			}
+		}
+		alphabet_datatype * t = debug_array;
+		alphabet_datatype * d = debug_array + MAX_DIM;
+
+		for(size_t j = 0; j < MAX_DIM; ++j) {
+			in_target_test << t[j] << std::endl;
+			in_database_test << d[j] << std::endl;
+		}
+	}
+	in_target_test.close();
+	in_database_test.close();
+	std::cout << "\033[1;32m[SWAIE TESTBENCH] ✔ Unpacking succesful! \033[0m" << std::endl;
+
 	std::cout << "[SWAIE TESTBENCH] Generating AIE input file." << std::endl;
 	std::ofstream in_target("../../aie/data/in_target.txt", std::ios::out | std::ios::trunc);
 	std::ofstream in_database("../../aie/data/in_database.txt", std::ios::out | std::ios::trunc);
@@ -80,10 +138,6 @@ int main(int argc, char *argv[]) {
     }
 	for(size_t i = 0; i < INPUT_SIZE; ++i) {
 		std::cout << "\r[SWAIE TESTBENCH] Writing sequence: ";
-		// in_target << target[i][0] << std::endl;
-		// in_target << target[i][1] << std::endl;
-		// in_database << database[i][0] << std::endl;
-		// in_database << database[i][1] << std::endl;
 		for(size_t j = 0; j < MAX_DIM; ++j) {
 			in_target << target[i][j] << std::endl;
 			in_database << database[i][j] << std::endl;

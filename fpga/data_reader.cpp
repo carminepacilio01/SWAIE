@@ -36,33 +36,32 @@ typedef ap_uint<PORT_WIDTH> input_t;
 void dispatchToAIE(hls::stream<input_t> &reads_stream, 
 	hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& target_aie, 
 	hls::stream<ap_int<sizeof(int32_t) * 8 * 4>>& database_aie) {
+	
+	input_t input[PACK_SEQ << 1];
+#pragma HLS ARRAY_PARTITION variable=input dim=1 complete
+	read_data_from_couple: for (int i = 0; i < PACK_SEQ << 1; i++) {
+#pragma HLS PIPELINE
+			input[i] = reads_stream.read();
+		}
 
-	 int k = 0;
-	 for (int i = 0; i < PACK_SEQ; i++) {
-		 auto packed_data = reads_stream.read();
-		 for (int j = 0; j < 128; j++) {
-			 if (k < MAX_DIM) {
-				 target_aie.write(packed_data.range(
-					 (j + 1) * BITS_PER_CHAR - 1,
-					 j * BITS_PER_CHAR
-				 ));
-				 k++;
-			 }
-		 }
-	 }
-	 k = 0;
-	 for (int i = PACK_SEQ; i < 2 * PACK_SEQ; i++) {
-		 auto packed_data = reads_stream.read();
-		 for (int j = 0; j < 128; j++) {
-			 if (k < MAX_DIM) {
-				 database_aie.write(packed_data.range(
-					 (j + 1) * BITS_PER_CHAR - 1,
-					 j * BITS_PER_CHAR
-				 ));
-				 k++;
-			 }
-		 }
-	 }
+	int k = 0;
+	alphabet_datatype reads[MAX_DIM<<1];
+	unpack_loop: for (int i = 0; i < PACK_SEQ << 1; i++) {
+#pragma HLS PIPELINE
+		for (int j = 0; j < 128; j++) {
+			reads[k] = input[i].range(
+				(j + 1) * BITS_PER_CHAR - 1,
+				j * BITS_PER_CHAR);
+			k++;
+		}
+	}
+	alphabet_datatype * t = reads;
+	alphabet_datatype * d = reads + MAX_DIM;
+
+	for(size_t j = 0; j < MAX_DIM; ++j) {
+		target_aie.write(t[j]);
+		database_aie.write(d[j]);
+	}
 }
 
 void read_input_data(input_t *input, hls::stream<input_t> &input_stream, int n, int num_couples) {

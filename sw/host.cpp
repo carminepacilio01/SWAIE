@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
 
 	int size = INPUT_SIZE;
 
-	input_t input[PACK_SEQ] = {0};
+	input_t input[N_PACK] = {0};
 	std::vector<int32_t> hw_score(INPUT_SIZE, 0);
 	std::vector<int32_t> golden_score(INPUT_SIZE, 0);
 
@@ -101,33 +101,26 @@ int main(int argc, char *argv[]) {
 	auto [target, database] = fastareader::readFastaFile(filename);
 
 	std::vector<alphabet_datatype> tmp(INPUT_SIZE * MAX_DIM * 2, 0);
-	tmp.shrink_to_fit();
 	for (int i = 0; i < INPUT_SIZE; i++) {
 		for (int j = 0; j < MAX_DIM; j++) {
-			tmp[i+j] = target[i][j];
+			tmp[j+((SEQ_SIZE + PADDING_SIZE)*2)*i] = target[i][j];
 		}
 		for (int j = MAX_DIM; j < MAX_DIM*2; j++) {
-			tmp[i+j] = database[i][j-MAX_DIM];
+			tmp[j+((SEQ_SIZE + PADDING_SIZE)*2)*i] = database[i][j-MAX_DIM];
 		}
 	}
 
-	// int chars_per_word = PORT_WIDTH / BITS_PER_CHAR;
-	// for (int n = 0; n < size; n++) {
-	// 	int k = 0;
-	// 	for(int i = 0; i < PACK_SEQ*2 ; i++) {
-	// 		for (int j = 0; j < chars_per_word; j++) {
-	// 			if(k > MAX_DIM*BITS_PER_CHAR) continue;
-	// 			else {
-	// 				input[n*(PACK_SEQ*2+1) + i].range(
-	// 					(j + 1)*BITS_PER_CHAR - 1,
-	// 					j * BITS_PER_CHAR
-	// 				) = tmp[n * MAX_DIM + k];
-	// 				k++;
-	// 			}
-	// 		}
-	// 	}
-	// }
-	
+	for (int n = 0; n < INPUT_SIZE; n++) {
+		int k = 0;
+		for(int i = 0; i < PACK_SEQ*2 ; i++){
+			for(int j = 0; j < 128; j++){
+				input[n*(PACK_SEQ*2) + i].range(
+					(j+1)*BITS_PER_CHAR-1, j*BITS_PER_CHAR
+				) = tmp[k+((SEQ_SIZE + PADDING_SIZE)*2)*n];
+				k++;
+			}
+		}
+	}
 
 ///////////////////////////     INITIAL2IZING THE BOARD     ///////////////////////////  
 	std::cout << "[SWAIE] Programming device: " << std::endl;
@@ -140,7 +133,7 @@ int main(int argc, char *argv[]) {
     xrtMemoryGroup bank_input  = data_reader.group_id(arg_reader_input);
 
     // create device buffers - if you have to load some data, here they are
-    xrt::bo buffer_reader = xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_input); 
+    xrt::bo buffer_reader = xrt::bo(device, N_PACK * sizeof(input_t), xrt::bo::flags::normal, bank_input); 
     xrt::bo buffer_output = xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_output); 
 
     // create runner instances
