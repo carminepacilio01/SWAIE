@@ -25,7 +25,7 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#define INPUT_SIZE 500000
+#define INPUT_SIZE 5000
 #define SEQ_SIZE 150
 
 #define PADDING_SIZE (4 - (SEQ_SIZE % 4)) % 4

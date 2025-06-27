@@ -80,7 +80,10 @@ namespace fastareader {
                 seqCounter = (seqCounter == 0) ? 1 : 0;
                 currSeq.clear();
             }
+            std::cout << "\r[FASTA READER] Reading: ";
+            showProgressBar(i, INPUT_SIZE * 2);
         }
+        std::cout << std::endl;
 
         std::cout << "[FASTA READER] Succesfully read " << INPUT_SIZE  << " sequences pairs." << std::endl;
         file.close();
@@ -102,4 +105,30 @@ namespace fastareader {
 
         return -1;
     }
+    
+    void showProgressBar(int progress, int total) {
+    struct winsize w;
+    int barWidth;
+
+    // STDOUT_FILENO is the file descriptor for stdout
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1) {
+        perror("ioctl");
+        barWidth = 25;
+    } else {
+        barWidth = w.ws_col - 100;
+    }
+
+    float ratio = static_cast<float>(progress) / total;
+    int pos = static_cast<int>(barWidth * ratio);
+
+    std::cout << "[";
+    for (int i = 0; i < barWidth; ++i) {
+        if (i < pos) std::cout << "▒";
+        else if (i == pos) std::cout << ">";
+        else std::cout << " ";
+    }
+    std::cout << "] " << int(ratio * 100.0) << " %\r";
+    std::cout.flush();
+}
 } // namespace fastareader
+

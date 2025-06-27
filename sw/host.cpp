@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include <iostream>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <string>
 #include <vector>
 #include <limits>
@@ -55,18 +56,15 @@ std::ostream& reset(std::ostream& os);
 void printConf(const std::vector<alphabet_datatype>& target, const std::vector<alphabet_datatype>& database);
 int compute_golden(std::vector<alphabet_datatype>& target, std::vector<alphabet_datatype>& database);
 std::string toString(const std::vector<alphabet_datatype>& seq);
+void showProgressBar(int progress, int total);
 
 int main(int argc, char *argv[]) {
-
-    srandom(static_cast<unsigned>(time(0)));
 
 	std::string filename;
 	if(argc < 3) filename = "SRR33920980.fasta";
 	else filename = argv[2];
-
-	int size = INPUT_SIZE;
-
-	input_t input[N_PACK] = {0};
+    
+	std::vector<input_t> input(N_PACK, 0);
 	std::vector<int32_t> hw_score(INPUT_SIZE, 0);
 	std::vector<int32_t> golden_score(INPUT_SIZE, 0);
 
@@ -108,6 +106,9 @@ int main(int argc, char *argv[]) {
 		for (int j = MAX_DIM; j < MAX_DIM*2; j++) {
 			tmp[j+((SEQ_SIZE + PADDING_SIZE)*2)*i] = database[i][j-MAX_DIM];
 		}
+
+        std::cout << "\r[SWAIE] Packing sequences:";
+		showProgressBar(i + 1, INPUT_SIZE*2);
 	}
 
 	for (int n = 0; n < INPUT_SIZE; n++) {
@@ -120,40 +121,48 @@ int main(int argc, char *argv[]) {
 				k++;
 			}
 		}
+        std::cout << "\r[SWAIE] Packing sequences:";
+		showProgressBar(INPUT_SIZE + n + 1, INPUT_SIZE*2);
 	}
+    std::cout << std::endl;
+    std::cout << "\033[1;32m[SWAIE] ✔ Packing succesful! \033[0m" << std::endl;
 
 ///////////////////////////     INITIAL2IZING THE BOARD     ///////////////////////////  
 	std::cout << "[SWAIE] Programming device: " << std::endl;
-    // create kernel objects
     xrt::kernel data_reader = xrt::kernel(device, xclbin_uuid, "data_reader");
     xrt::kernel output_sink = xrt::kernel(device, xclbin_uuid, "output_sink");
 
-    // get memory bank groups for device buffer - required for axi master input/ouput
-    xrtMemoryGroup bank_output = output_sink.group_id(arg_sink_output);
     xrtMemoryGroup bank_input  = data_reader.group_id(arg_reader_input);
+    xrtMemoryGroup bank_mask = output_sink.group_id(arg_sink_output);
+    int32_t bank_output = ffs(bank_mask)-1;
 
-    // create device buffers - if you have to load some data, here they are
+    std::cout << "- Memory banks initialized succesfully." << std::endl;
+
     xrt::bo buffer_reader = xrt::bo(device, N_PACK * sizeof(input_t), xrt::bo::flags::normal, bank_input); 
-    xrt::bo buffer_output = xrt::bo(device, size * sizeof(int32_t), xrt::bo::flags::normal, bank_output); 
+    xrt::bo buffer_output = xrt::bo(device, 1, xrt::bo::flags::normal, static_cast<xrtMemoryGroup>(bank_output));
+    
+    std::cout << "- Device buffers created succesfully." << std::endl;
 
-    // create runner instances
     xrt::run run_data_reader = xrt::run(data_reader);
     xrt::run run_output_sink = xrt::run(output_sink);
 
     run_data_reader.set_arg(arg_reader_input, buffer_reader);
-    run_data_reader.set_arg(arg_reader_size, size);
+    std::cout << "[DEBUG] setted args for data reader input." << std::endl;
+    run_data_reader.set_arg(arg_reader_size, INPUT_SIZE);
+    std::cout << "[DEBUG] setted args for data reader size." << std::endl;
 
-    // set sink_from_aie kernel arguments
     run_output_sink.set_arg(arg_sink_output, buffer_output);
-    run_output_sink.set_arg(arg_sink_size, size);
+    std::cout << "[DEBUG] setted args for output sink output." << std::endl;
+    run_output_sink.set_arg(arg_sink_size, INPUT_SIZE);
+    std::cout << "[DEBUG] setted args for output sink size." << std::endl;
 
-	std::cout << bold_on << green << "[SWAIE]  Device programmed succesfully: " << reset << std::endl;
+    std::cout << bold_on << green << "[SWAIE] ✔ Device programmed succesfully: " << reset << std::endl;
 
     std::cout << bold_on << "[SWAIE] Running FPGA accelerator. \n" << bold_off;
 
     std::cout << "[SWAIE] Writing " << INPUT_SIZE << " sequences to accelarator. \n" << bold_off;
     // write data into the input buffer
-    buffer_reader.write(input);
+    buffer_reader.write(input.data());
     buffer_reader.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -171,11 +180,11 @@ int main(int argc, char *argv[]) {
     buffer_output.read(hw_score.data()); 
 
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
-	float gcup = (double) (cell_number / (float)duration.count());
-	
+    float gcup = (double) (cell_number / (float)duration.count());
+    
     std::cout << bold_on << green << "[SWAIE] Finished FPGA excecution." << reset << std::endl;
     std::cout << "\t -- FPGA Kernel executed in " << (float)duration.count() * 1e-6 << "ms" << std::endl;
-	std::cout << "\t -- GCUPS: " << gcup << std::endl;
+    std::cout << "\t -- GCUPS: " << gcup << std::endl;
 
     /////////////////////////			TESTBENCH			////////////////////////////////////
 
@@ -194,7 +203,6 @@ int main(int argc, char *argv[]) {
     std::cout << "\t -- GCUPS: " << gcup << std::endl;
 
 	////////test bench results
-	std::cout << bold_on << "[SWAIE] Comparing results. \n" << bold_off << std::endl;
 	bool test_score=true;
 	for (int i=0; i < INPUT_SIZE; i++){
 		if (hw_score[i]!=golden_score[i]){
@@ -203,10 +211,13 @@ int main(int argc, char *argv[]) {
             std::cout << "HW: "<< hw_score[i] << ", SW: " << golden_score[i] << std::endl;
             test_score=false;
         }
+        std::cout << "\r[SWAIE] Comparing results: ";
+        showProgressBar(i + 1, INPUT_SIZE);
 	}
+    std::cout << std::endl;
 
-	if (test_score) std::cout << bold_on << green << "[SWAIE] Test PASSED: All outputs match are correct." << reset << std::endl;
-	else std::cout << bold_on << red << "[SWAIE] Test FAILED: Some outputs do not match reference." << reset << std::endl;
+	if (test_score) std::cout << bold_on << green << "[SWAIE] ✔ Test PASSED: All outputs match are correct." << reset << std::endl;
+	else std::cout << bold_on << red << "[SWAIE] ✖ Test FAILED: Some outputs do not match reference." << reset << std::endl;
 	
 	return 0;
 }
@@ -285,4 +296,29 @@ std::string toString(const std::vector<alphabet_datatype>& seq) {
     }
 
     return result;
+}
+
+void showProgressBar(int progress, int total) {
+    struct winsize w;
+    int barWidth;
+
+    // STDOUT_FILENO is the file descriptor for stdout
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == -1) {
+        perror("ioctl");
+        barWidth = 25;
+    } else {
+        barWidth = w.ws_col - 100;
+    }
+
+    float ratio = static_cast<float>(progress) / total;
+    int pos = static_cast<int>(barWidth * ratio);
+
+    std::cout << "[";
+    for (int i = 0; i < barWidth; ++i) {
+        if (i < pos) std::cout << "▒";
+        else if (i == pos) std::cout << ">";
+        else std::cout << " ";
+    }
+    std::cout << "] " << int(ratio * 100.0) << " %\r";
+    std::cout.flush();
 }

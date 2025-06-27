@@ -25,6 +25,7 @@
 #ifndef FASTAREADER_HPP
 #define FASTAREADER_HPP
 #include <ap_int.h>
+#include <sys/ioctl.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -38,7 +39,7 @@ namespace fastareader {
         std::vector<std::vector<alphabet_datatype>>, 
         std::vector<std::vector<alphabet_datatype>> 
     > readFastaFile(const std::string& filename);
-    
+    void showProgressBar(int progress, int total);
     alphabet_datatype compression(char letter);
 }
 
